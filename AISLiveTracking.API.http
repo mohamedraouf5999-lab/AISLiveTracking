@@ -1,0 +1,6 @@
+@AISLiveTracking.API_HostAddress = http://localhost:5121
+
+GET {{AISLiveTracking.API_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
