@@ -57,8 +57,47 @@ public class AisIngestionBackgroundService : BackgroundService
                 var json = JsonSerializer.Serialize(subscription);
                 var bytes = Encoding.UTF8.GetBytes(json);
 
+                await socket.SendAsync(
+    bytes,
+    WebSocketMessageType.Text,
+    true,
+    stoppingToken);
+                _logger.LogInformation("Subscription sent successfully.");
+                var buffer = new byte[8192];
 
-                break;
+                while (socket.State == WebSocketState.Open)
+                {
+                    var result = await socket.ReceiveAsync(buffer, stoppingToken);
+                    var message = Encoding.UTF8.GetString(buffer, 0, result.Count);
+                    _logger.LogInformation("Received message: {Message}", message);
+                    var envelope = JsonSerializer.Deserialize<AisMessageEnvelope>(message);
+                    if (envelope == null)
+                    {
+                        continue;
+                    }
+
+                    switch (envelope.MessageType)
+                    {
+                        case "PositionReport":
+                            _logger.LogInformation("PositionReport received.");
+                            break;
+
+                        case "ShipStaticData":
+                            _logger.LogInformation("ShipStaticData received.");
+                            break;
+
+                        default:
+                            _logger.LogWarning("Unknown message type: {MessageType}", envelope.MessageType);
+                            break;
+                    }
+                }
+
+
+
+            }
+            catch (OperationCanceledException)
+            {
+                _logger.LogInformation("Background service is stopping.");
             }
             catch (Exception ex)
             {
