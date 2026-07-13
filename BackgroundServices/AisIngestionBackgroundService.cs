@@ -1,6 +1,9 @@
 using Microsoft.Extensions.Hosting;
 using System.Net.WebSockets;
 using System.Text;
+using AISLiveTracking.API.Models;
+using System.Text.Json;
+
 
 namespace AISLiveTracking.API.BackgroundServices;
 
@@ -32,6 +35,28 @@ public class AisIngestionBackgroundService : BackgroundService
                 await socket.ConnectAsync(new Uri(url!), stoppingToken);
 
                 _logger.LogInformation("Connected successfully.");
+                var subscription = new SubscriptionRequest
+                {
+                    APIKey = _configuration["AisStream:ApiKey"]!,
+                    BoundingBoxes = new()
+    {
+        new()
+        {
+            new() { -90, -180 },
+            new() { 90, 180 }
+        }
+    },
+                    FilterMessageTypes = new()
+    {
+        "PositionReport",
+        "ShipStaticData"
+    }
+                };
+
+
+                var json = JsonSerializer.Serialize(subscription);
+                var bytes = Encoding.UTF8.GetBytes(json);
+
 
                 break;
             }
