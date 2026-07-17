@@ -1,9 +1,8 @@
 using Microsoft.Extensions.Hosting;
 using System.Net.WebSockets;
 using System.Text;
-using AISLiveTracking.API.Models;
 using System.Text.Json;
-
+using AISLiveTracking.API.Models;
 
 namespace AISLiveTracking.API.BackgroundServices;
 
@@ -35,42 +34,48 @@ public class AisIngestionBackgroundService : BackgroundService
                 await socket.ConnectAsync(new Uri(url!), stoppingToken);
 
                 _logger.LogInformation("Connected successfully.");
+
                 var subscription = new SubscriptionRequest
                 {
                     APIKey = _configuration["AisStream:ApiKey"]!,
                     BoundingBoxes = new()
-    {
-        new()
-        {
-            new() { -90, -180 },
-            new() { 90, 180 }
-        }
-    },
+                    {
+                        new()
+                        {
+                            new() { -90, -180 },
+                            new() { 90, 180 }
+                        }
+                    },
                     FilterMessageTypes = new()
-    {
-        "PositionReport",
-        "ShipStaticData"
-    }
+                    {
+                        "PositionReport",
+                        "ShipStaticData"
+                    }
                 };
-
 
                 var json = JsonSerializer.Serialize(subscription);
                 var bytes = Encoding.UTF8.GetBytes(json);
 
                 await socket.SendAsync(
-    bytes,
-    WebSocketMessageType.Text,
-    true,
-    stoppingToken);
+                    bytes,
+                    WebSocketMessageType.Text,
+                    true,
+                    stoppingToken);
+
                 _logger.LogInformation("Subscription sent successfully.");
+
                 var buffer = new byte[8192];
 
                 while (socket.State == WebSocketState.Open)
                 {
                     var result = await socket.ReceiveAsync(buffer, stoppingToken);
+
                     var message = Encoding.UTF8.GetString(buffer, 0, result.Count);
+
                     _logger.LogInformation("Received message: {Message}", message);
+
                     var envelope = JsonSerializer.Deserialize<AisMessageEnvelope>(message);
+
                     if (envelope == null)
                     {
                         continue;
@@ -79,11 +84,11 @@ public class AisIngestionBackgroundService : BackgroundService
                     switch (envelope.MessageType)
                     {
                         case "PositionReport":
-                            _logger.LogInformation("PositionReport received.");
+                            await HandlePositionReport(envelope);
                             break;
 
                         case "ShipStaticData":
-                            _logger.LogInformation("ShipStaticData received.");
+                            await HandleShipStaticData(envelope);
                             break;
 
                         default:
@@ -91,9 +96,6 @@ public class AisIngestionBackgroundService : BackgroundService
                             break;
                     }
                 }
-
-
-
             }
             catch (OperationCanceledException)
             {
@@ -106,5 +108,49 @@ public class AisIngestionBackgroundService : BackgroundService
                 await Task.Delay(1000, stoppingToken);
             }
         }
+    }
+
+    private Task HandlePositionReport(AisMessageEnvelope envelope)
+    {
+        var reportElement = envelope.Message.GetProperty("PositionReport");
+
+        var report = reportElement.Deserialize<PositionReport>();
+
+        if (report == null)
+        {
+            return Task.CompletedTask;
+        }
+
+        if (report.UserID <= 0)
+        {
+            _logger.LogWarning("Invalid MMSI.");
+
+            return Task.CompletedTask;
+        }
+        if (report.UserID.ToString().Length != 9)
+        {
+            _logger.LogWarning("Invalid MMSI length.");
+
+            return Task.CompletedTask;
+        }
+        if (report.Latitude < -90 || report.Latitude > 90)
+        {
+            _logger.LogWarning("Invalid Latitude.");
+
+            return Task.CompletedTask;
+        }
+        if (report.Longitude < -180 || report.Longitude > 180)
+        {
+            _logger.LogWarning("Invalid Longitude.");
+
+            return Task.CompletedTask;
+        }
+
+        return Task.CompletedTask;
+    }
+
+    private Task HandleShipStaticData(AisMessageEnvelope envelope)
+    {
+        return Task.CompletedTask;
     }
 }
