@@ -8,11 +8,11 @@ public class PositionReport
 
     public double Longitude { get; set; }
 
-    public double Sog { get; set; }
+    public double? Sog { get; set; }
 
-    public double Cog { get; set; }
+    public double? Cog { get; set; }
 
-    public int TrueHeading { get; set; }
+    public int? TrueHeading { get; set; }
 
     public int NavigationalStatus { get; set; }
 

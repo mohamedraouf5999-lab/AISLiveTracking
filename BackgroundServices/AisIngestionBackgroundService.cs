@@ -145,6 +145,33 @@ public class AisIngestionBackgroundService : BackgroundService
 
             return Task.CompletedTask;
         }
+        if (report.Latitude == 91 || report.Longitude == 181)
+        {
+            _logger.LogWarning("Invalid sentinel position.");
+
+            return Task.CompletedTask;
+        }
+        if (report.Sog == 102.3)
+        {
+            report.Sog = null;
+        }
+
+        if (report.Cog == 360)
+        {
+            report.Cog = null;
+        }
+
+        if (report.TrueHeading == 511)
+        {
+            report.TrueHeading = null;
+        }
+        if (!report.Valid)
+        {
+            _logger.LogWarning("Position report is marked as invalid.");
+
+            return Task.CompletedTask;
+        }
+
 
         return Task.CompletedTask;
     }
