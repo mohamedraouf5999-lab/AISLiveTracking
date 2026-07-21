@@ -3,6 +3,10 @@ using System.Net.WebSockets;
 using System.Text;
 using System.Text.Json;
 using AISLiveTracking.API.Models;
+using AISLiveTracking.API.Data.Interfaces;
+
+
+
 
 namespace AISLiveTracking.API.BackgroundServices;
 
@@ -10,13 +14,17 @@ public class AisIngestionBackgroundService : BackgroundService
 {
     private readonly IConfiguration _configuration;
     private readonly ILogger<AisIngestionBackgroundService> _logger;
+    private readonly IVesselRepository _vesselRepository;
+
 
     public AisIngestionBackgroundService(
-        IConfiguration configuration,
-        ILogger<AisIngestionBackgroundService> logger)
+     IConfiguration configuration,
+     ILogger<AisIngestionBackgroundService> logger,
+     IVesselRepository vesselRepository)
     {
         _configuration = configuration;
         _logger = logger;
+        _vesselRepository = vesselRepository;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -165,6 +173,7 @@ public class AisIngestionBackgroundService : BackgroundService
         {
             report.TrueHeading = null;
         }
+
         if (!report.Valid)
         {
             _logger.LogWarning("Position report is marked as invalid.");
@@ -172,8 +181,16 @@ public class AisIngestionBackgroundService : BackgroundService
             return Task.CompletedTask;
         }
 
+        var metaData = envelope.MetaData.Deserialize<MetaData>();
+
+        if (metaData == null)
+        {
+            return Task.CompletedTask;
+        }
+
 
         return Task.CompletedTask;
+
     }
 
     private Task HandleShipStaticData(AisMessageEnvelope envelope)
