@@ -60,6 +60,7 @@ C:\Users\Mohamed Raoaf\AISLiveTracking\AISLiveTracking.API\obj\Debug\net8.0\AISL
 C:\Users\Mohamed Raoaf\AISLiveTracking\AISLiveTracking.API\obj\Debug\net8.0\AISLiveTracking.API.csproj.CoreCompileInputs.cache
 C:\Users\Mohamed Raoaf\AISLiveTracking\AISLiveTracking.API\obj\Debug\net8.0\AISLiveTracking.API.MvcApplicationPartsAssemblyInfo.cs
 C:\Users\Mohamed Raoaf\AISLiveTracking\AISLiveTracking.API\obj\Debug\net8.0\AISLiveTracking.API.MvcApplicationPartsAssemblyInfo.cache
+C:\Users\Mohamed Raoaf\AISLiveTracking\AISLiveTracking.API\obj\Debug\net8.0\AISLiveTracking.API.sourcelink.json
 C:\Users\Mohamed Raoaf\AISLiveTracking\AISLiveTracking.API\obj\Debug\net8.0\rjimswa.dswa.cache.json
 C:\Users\Mohamed Raoaf\AISLiveTracking\AISLiveTracking.API\obj\Debug\net8.0\rjsmrazor.dswa.cache.json
 C:\Users\Mohamed Raoaf\AISLiveTracking\AISLiveTracking.API\obj\Debug\net8.0\rjsmcshtml.dswa.cache.json
@@ -75,4 +76,3 @@ C:\Users\Mohamed Raoaf\AISLiveTracking\AISLiveTracking.API\obj\Debug\net8.0\refi
 C:\Users\Mohamed Raoaf\AISLiveTracking\AISLiveTracking.API\obj\Debug\net8.0\AISLiveTracking.API.pdb
 C:\Users\Mohamed Raoaf\AISLiveTracking\AISLiveTracking.API\obj\Debug\net8.0\AISLiveTracking.API.genruntimeconfig.cache
 C:\Users\Mohamed Raoaf\AISLiveTracking\AISLiveTracking.API\obj\Debug\net8.0\ref\AISLiveTracking.API.dll
-C:\Users\Mohamed Raoaf\AISLiveTracking\AISLiveTracking.API\obj\Debug\net8.0\AISLiveTracking.API.sourcelink.json

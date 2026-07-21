@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("AISLiveTracking.API")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+5831dec3b0d70420c6f14b1dfd8a198b88664b3d")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+a4a2629903553e9643501220125e7bfb620197a4")]
 [assembly: System.Reflection.AssemblyProductAttribute("AISLiveTracking.API")]
 [assembly: System.Reflection.AssemblyTitleAttribute("AISLiveTracking.API")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

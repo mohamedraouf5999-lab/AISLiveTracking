@@ -14,18 +14,16 @@ public class AisIngestionBackgroundService : BackgroundService
 {
     private readonly IConfiguration _configuration;
     private readonly ILogger<AisIngestionBackgroundService> _logger;
-    private readonly IVesselRepository _vesselRepository;
+    
 
 
-    public AisIngestionBackgroundService(
-     IConfiguration configuration,
-     ILogger<AisIngestionBackgroundService> logger,
-     IVesselRepository vesselRepository)
-    {
-        _configuration = configuration;
-        _logger = logger;
-        _vesselRepository = vesselRepository;
-    }
+public AisIngestionBackgroundService(
+    IConfiguration configuration,
+    ILogger<AisIngestionBackgroundService> logger)
+{
+    _configuration = configuration;
+    _logger = logger;
+}
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
