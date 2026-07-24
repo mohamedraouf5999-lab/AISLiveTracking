@@ -13,7 +13,7 @@ builder.Services.AddControllers();
 builder.Services.AddSwaggerGen();
 builder.Services.AddScoped<DatabaseConnection>();
 builder.Services.AddScoped<IVesselRepository, VesselRepository>();
-
+builder.Services.AddScoped<IPositionRepository, PositionRepository>();
 
 
 

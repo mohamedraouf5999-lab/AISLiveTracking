@@ -6,8 +6,7 @@ public class Vessel
 
     public int? Imo { get; set; }
 
-    public string? Name { get; set; }
-
+    public string? VesselName { get; set; }
     public string? CallSign { get; set; }
 
     public short? ShipType { get; set; }

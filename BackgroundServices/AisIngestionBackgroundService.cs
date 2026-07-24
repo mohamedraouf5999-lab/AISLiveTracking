@@ -14,16 +14,17 @@ public class AisIngestionBackgroundService : BackgroundService
 {
     private readonly IConfiguration _configuration;
     private readonly ILogger<AisIngestionBackgroundService> _logger;
-    
+    private readonly IServiceScopeFactory _scopeFactory;
 
-
-public AisIngestionBackgroundService(
+    public AisIngestionBackgroundService(
     IConfiguration configuration,
-    ILogger<AisIngestionBackgroundService> logger)
-{
-    _configuration = configuration;
-    _logger = logger;
-}
+    ILogger<AisIngestionBackgroundService> logger,
+    IServiceScopeFactory scopeFactory)
+    {
+        _configuration = configuration;
+        _logger = logger;
+        _scopeFactory = scopeFactory;
+    }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -36,6 +37,8 @@ public AisIngestionBackgroundService(
                 var url = _configuration["AisStream:WebSocketUrl"];
 
                 _logger.LogInformation("Connecting to AIS Stream...");
+
+                socket.Options.KeepAliveInterval = TimeSpan.FromSeconds(20);
 
                 await socket.ConnectAsync(new Uri(url!), stoppingToken);
 
@@ -60,6 +63,7 @@ public AisIngestionBackgroundService(
                 };
 
                 var json = JsonSerializer.Serialize(subscription);
+                _logger.LogInformation("Subscription JSON: {Json}", json);
                 var bytes = Encoding.UTF8.GetBytes(json);
 
                 await socket.SendAsync(
@@ -74,7 +78,14 @@ public AisIngestionBackgroundService(
 
                 while (socket.State == WebSocketState.Open)
                 {
-                    var result = await socket.ReceiveAsync(buffer, stoppingToken);
+                    var result = await socket.ReceiveAsync(
+    new ArraySegment<byte>(buffer),
+    stoppingToken);
+                    if (result.MessageType == WebSocketMessageType.Close)
+                    {
+                        _logger.LogWarning("Server closed the connection.");
+                        break;
+                    }
 
                     var message = Encoding.UTF8.GetString(buffer, 0, result.Count);
 
@@ -116,46 +127,47 @@ public AisIngestionBackgroundService(
         }
     }
 
-    private Task HandlePositionReport(AisMessageEnvelope envelope)
+    private async Task HandlePositionReport(AisMessageEnvelope envelope)
     {
+        _logger.LogInformation("HandlePositionReport called");
         var reportElement = envelope.Message.GetProperty("PositionReport");
 
         var report = reportElement.Deserialize<PositionReport>();
 
         if (report == null)
         {
-            return Task.CompletedTask;
+            return;
         }
 
         if (report.UserID <= 0)
         {
             _logger.LogWarning("Invalid MMSI.");
 
-            return Task.CompletedTask;
+            return;
         }
         if (report.UserID.ToString().Length != 9)
         {
             _logger.LogWarning("Invalid MMSI length.");
 
-            return Task.CompletedTask;
+            return;
         }
         if (report.Latitude < -90 || report.Latitude > 90)
         {
             _logger.LogWarning("Invalid Latitude.");
 
-            return Task.CompletedTask;
+            return;
         }
         if (report.Longitude < -180 || report.Longitude > 180)
         {
             _logger.LogWarning("Invalid Longitude.");
 
-            return Task.CompletedTask;
+            return;
         }
         if (report.Latitude == 91 || report.Longitude == 181)
         {
             _logger.LogWarning("Invalid sentinel position.");
 
-            return Task.CompletedTask;
+            return;
         }
         if (report.Sog == 102.3)
         {
@@ -176,18 +188,57 @@ public AisIngestionBackgroundService(
         {
             _logger.LogWarning("Position report is marked as invalid.");
 
-            return Task.CompletedTask;
+            return;
         }
 
         var metaData = envelope.MetaData.Deserialize<MetaData>();
 
         if (metaData == null)
         {
-            return Task.CompletedTask;
+            return;
         }
 
+        if (string.IsNullOrWhiteSpace(metaData.time_utc))
+        {
+            _logger.LogWarning("Missing timestamp.");
 
-        return Task.CompletedTask;
+            return;
+        }
+
+        if (!DateTime.TryParse(
+         metaData.time_utc.Replace(" UTC", ""),
+         out var messageTime))
+        {
+            _logger.LogWarning("Invalid timestamp: {Timestamp}", metaData.time_utc);
+            return;
+        }
+        // if (messageTime > DateTime.UtcNow.AddMinutes(5))
+        // {
+        //   _logger.LogWarning("Timestamp is too far in the future.");
+
+        //     return;
+        //    }
+        using var scope = _scopeFactory.CreateScope();
+
+        var vesselRepository =
+            scope.ServiceProvider.GetRequiredService<IVesselRepository>();
+
+        var positionRepository =
+            scope.ServiceProvider.GetRequiredService<IPositionRepository>();
+
+        var vessel = new Vessel
+        {
+            Mmsi = report.UserID,
+            VesselName = metaData.ShipName,
+            FirstSeenUtc = DateTime.UtcNow,
+            LastSeenUtc = DateTime.UtcNow
+        };
+
+        await vesselRepository.UpsertAsync(vessel);
+
+        await positionRepository.InsertAsync(report, messageTime);
+
+        return;
 
     }
 

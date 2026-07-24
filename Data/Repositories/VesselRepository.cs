@@ -40,7 +40,7 @@ public class VesselRepository : IVesselRepository
             WHEN MATCHED THEN
                 UPDATE SET
                     imo = @Imo,
-                    name = @Name,
+                    name = @VesselName,
                     call_sign = @CallSign,
                     ship_type = @ShipType,
                     last_seen_utc = @LastSeenUtc,
@@ -62,7 +62,7 @@ public class VesselRepository : IVesselRepository
                 (
                     @Mmsi,
                     @Imo,
-                    @Name,
+                    @VesselName,
                     @CallSign,
                     @ShipType,
                     @FirstSeenUtc,
