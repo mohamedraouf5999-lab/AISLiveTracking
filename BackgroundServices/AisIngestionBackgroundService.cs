@@ -76,10 +76,10 @@ public class AisIngestionBackgroundService : BackgroundService
                     Encoding.UTF8.GetBytes(json);
 
                 await socket.SendAsync(
-    bytes,
-    WebSocketMessageType.Text,
-    true,
-    stoppingToken);
+                    bytes,
+                    WebSocketMessageType.Text,
+                    true,
+                    stoppingToken);
 
                 _logger.LogInformation(
                     "Subscription sent successfully.");
