@@ -27,7 +27,7 @@ public class IdentifierResolver : IIdentifierResolver
 
     if (!string.IsNullOrWhiteSpace(idType))
     {
-        idType = idType.ToLower();
+        idType = idType.Trim().ToLowerInvariant();
 
         if (idType == "mmsi")
         {
