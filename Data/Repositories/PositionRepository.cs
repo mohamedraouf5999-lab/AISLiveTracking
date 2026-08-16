@@ -60,4 +60,31 @@ public class PositionRepository : IPositionRepository
             MessageTime = messageTime
         });
     }
+    public async Task<Position?> GetLatestByMmsiAsync(long mmsi)
+    {
+        using var connection = _database.CreateConnection();
+
+        const string sql = """
+        SELECT TOP (1)
+            id,
+            mmsi,
+            latitude,
+            longitude,
+            sog,
+            cog,
+            true_heading,
+            nav_status,
+            rate_of_turn,
+            position_accuracy,
+            msg_timestamp_utc,
+            received_utc
+        FROM positions
+        WHERE mmsi = @mmsi
+        ORDER BY msg_timestamp_utc DESC;
+        """;
+
+        return await connection.QueryFirstOrDefaultAsync<Position>(
+            sql,
+            new { mmsi });
+    }
 }

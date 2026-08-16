@@ -2,6 +2,10 @@ using AISLiveTracking.API.Data;
 using AISLiveTracking.API.Data.Repositories;
 using AISLiveTracking.API.Data.Interfaces;
 using AISLiveTracking.API.BackgroundServices;
+using AISLiveTracking.API.Data.Services;
+
+
+
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -14,8 +18,8 @@ builder.Services.AddSwaggerGen();
 builder.Services.AddScoped<DatabaseConnection>();
 builder.Services.AddScoped<IVesselRepository, VesselRepository>();
 builder.Services.AddScoped<IPositionRepository, PositionRepository>();
-
-
+builder.Services.AddScoped<IIdentifierResolver, IdentifierResolver>();
+builder.Services.AddScoped<ILatestPositionRepository, LatestPositionRepository>();
 
 var app = builder.Build();
 

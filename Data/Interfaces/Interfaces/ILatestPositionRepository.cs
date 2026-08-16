@@ -2,9 +2,7 @@ using AISLiveTracking.API.Models;
 
 namespace AISLiveTracking.API.Data.Interfaces;
 
-public interface IPositionRepository
+public interface ILatestPositionRepository
 {
-    Task InsertAsync(PositionReport position, DateTime messageTime);
-
     Task<Position?> GetLatestByMmsiAsync(long mmsi);
 }

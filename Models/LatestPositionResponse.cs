@@ -1,10 +1,12 @@
 namespace AISLiveTracking.API.Models;
 
-public class Position
+public class LatestPositionResponse
 {
-    public long Id { get; set; }
-
     public long Mmsi { get; set; }
+
+    public int? Imo { get; set; }
+
+    public string? Name { get; set; }
 
     public decimal Latitude { get; set; }
 
@@ -14,15 +16,11 @@ public class Position
 
     public decimal? Cog { get; set; }
 
-    public int? TrueHeading { get; set; }
-
     public int? NavStatus { get; set; }
 
-    public int? RateOfTurn { get; set; }
+    public string? NavStatusText { get; set; }
 
-    public bool PositionAccuracy { get; set; }
+    public DateTime TimestampUtc { get; set; }
 
-    public DateTime MsgTimestampUtc { get; set; }
-
-    public DateTime ReceivedUtc { get; set; }
+    public long AgeSeconds { get; set; }
 }
