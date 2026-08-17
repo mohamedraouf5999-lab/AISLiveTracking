@@ -14,33 +14,64 @@ public class VesselRepository : IVesselRepository
     }
 
     public async Task<Vessel?> GetByMmsiAsync(long mmsi)
-    {
-        using var connection = _database.CreateConnection();
+{
+    using var connection = _database.CreateConnection();
 
-        const string sql = """
-            SELECT *
-            FROM vessels
-            WHERE mmsi = @Mmsi;
-            """;
+    const string sql = """
+        SELECT
+            mmsi AS Mmsi,
+            imo AS Imo,
+            name AS VesselName,
+            call_sign AS CallSign,
+            ship_type AS ShipType,
+            dim_to_bow AS DimToBow,
+            dim_to_stern AS DimToStern,
+            dim_to_port AS DimToPort,
+            dim_to_starboard AS DimToStarboard,
+            draught AS Draught,
+            destination AS Destination,
+            eta AS Eta,
+            first_seen_utc AS FirstSeenUtc,
+            last_seen_utc AS LastSeenUtc,
+            updated_utc AS UpdatedUtc
+        FROM vessels
+        WHERE mmsi = @Mmsi;
+        """;
 
-        return await connection.QueryFirstOrDefaultAsync<Vessel>(
-            sql,
-            new { Mmsi = mmsi });
-    }
-    public async Task<Vessel?> GetByImoAsync(int imo)
-    {
-        using var connection = _database.CreateConnection();
+    return await connection.QueryFirstOrDefaultAsync<Vessel>(
+        sql,
+        new { Mmsi = mmsi });
+}
 
-        const string sql = """
-        SELECT *
+public async Task<Vessel?> GetByImoAsync(int imo)
+{
+    using var connection = _database.CreateConnection();
+
+    const string sql = """
+        SELECT
+            mmsi AS Mmsi,
+            imo AS Imo,
+            name AS VesselName,
+            call_sign AS CallSign,
+            ship_type AS ShipType,
+            dim_to_bow AS DimToBow,
+            dim_to_stern AS DimToStern,
+            dim_to_port AS DimToPort,
+            dim_to_starboard AS DimToStarboard,
+            draught AS Draught,
+            destination AS Destination,
+            eta AS Eta,
+            first_seen_utc AS FirstSeenUtc,
+            last_seen_utc AS LastSeenUtc,
+            updated_utc AS UpdatedUtc
         FROM vessels
         WHERE imo = @Imo;
         """;
 
-        return await connection.QueryFirstOrDefaultAsync<Vessel>(
-            sql,
-            new { Imo = imo });
-    }
+    return await connection.QueryFirstOrDefaultAsync<Vessel>(
+        sql,
+        new { Imo = imo });
+}
     public async Task UpsertAsync(Vessel vessel)
 {
     using var connection = _database.CreateConnection();
