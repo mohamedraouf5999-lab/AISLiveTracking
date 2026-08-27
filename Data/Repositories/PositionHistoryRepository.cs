@@ -1,103 +1,27 @@
+using Dapper;
 using AISLiveTracking.API.Data.Interfaces;
 using AISLiveTracking.API.Models;
-using Dapper;
-using System.Globalization;
 
 namespace AISLiveTracking.API.Data.Repositories;
 
-public class PositionRepository : IPositionRepository
+public class PositionHistoryRepository : IPositionHistoryRepository
 {
     private readonly DatabaseConnection _database;
 
-    public PositionRepository(DatabaseConnection database)
+    public PositionHistoryRepository(DatabaseConnection database)
     {
         _database = database;
     }
 
-    public async Task InsertAsync(PositionReport position, DateTime messageTime)
-    {
-        using var connection = _database.CreateConnection();
-
-        const string sql = """
-            INSERT INTO positions
-            (
-                mmsi,
-                latitude,
-                longitude,
-                sog,
-                cog,
-                true_heading,
-                nav_status,
-                rate_of_turn,
-                position_accuracy,
-                msg_timestamp_utc
-            )
-            VALUES
-            (
-                @UserID,
-                @Latitude,
-                @Longitude,
-                @Sog,
-                @Cog,
-                @TrueHeading,
-                @NavigationalStatus,
-                @RateOfTurn,
-                @PositionAccuracy,
-                @MessageTime
-            );
-            """;
-
-        await connection.ExecuteAsync(sql, new
-        {
-            position.UserID,
-            position.Latitude,
-            position.Longitude,
-            position.Sog,
-            position.Cog,
-            position.TrueHeading,
-            position.NavigationalStatus,
-            position.RateOfTurn,
-            position.PositionAccuracy,
-            MessageTime = messageTime
-        });
-    }
-
-    public async Task<Position?> GetLatestByMmsiAsync(long mmsi)
-    {
-        using var connection = _database.CreateConnection();
-
-        const string sql = """
-            SELECT TOP (1)
-                id,
-                mmsi,
-                latitude,
-                longitude,
-                sog,
-                cog,
-                true_heading,
-                nav_status,
-                rate_of_turn,
-                position_accuracy,
-                msg_timestamp_utc,
-                received_utc
-            FROM positions
-            WHERE mmsi = @Mmsi
-            ORDER BY msg_timestamp_utc DESC, id DESC;
-            """;
-
-        return await connection.QueryFirstOrDefaultAsync<Position>(
-            sql,
-            new { Mmsi = mmsi });
-    }
-
-    public async Task<PositionHistoryResult> GetPositionsAsync(
+    public async Task<PositionHistoryResult> GetHistoryAsync(
+        long mmsi,
         DateTime? from,
         DateTime? to,
         double? minLat,
         double? maxLat,
         double? minLon,
         double? maxLon,
-        int? navStatus,
+        string? navStatus,
         double? minSog,
         double? maxSog,
         string sort,
@@ -117,16 +41,8 @@ public class PositionRepository : IPositionRepository
             var parts = cursor.Split('|', 2);
 
             if (parts.Length != 2 ||
-                !DateTime.TryParse(
-                    parts[0],
-                    CultureInfo.InvariantCulture,
-                    DateTimeStyles.RoundtripKind,
-                    out var parsedTimestamp) ||
-                !int.TryParse(
-                    parts[1],
-                    NumberStyles.Integer,
-                    CultureInfo.InvariantCulture,
-                    out var parsedId))
+                !DateTime.TryParse(parts[0], out var parsedTimestamp) ||
+                !int.TryParse(parts[1], out var parsedId))
             {
                 throw new ArgumentException("Invalid cursor.");
             }
@@ -176,7 +92,8 @@ public class PositionRepository : IPositionRepository
                 msg_timestamp_utc AS MsgTimestampUtc,
                 received_utc AS ReceivedUtc
             FROM positions
-            WHERE (@From IS NULL OR msg_timestamp_utc >= @From)
+            WHERE mmsi = @Mmsi
+              AND (@From IS NULL OR msg_timestamp_utc >= @From)
               AND (@To IS NULL OR msg_timestamp_utc <= @To)
               AND (@MinLat IS NULL OR latitude >= @MinLat)
               AND (@MaxLat IS NULL OR latitude <= @MaxLat)
@@ -195,6 +112,7 @@ public class PositionRepository : IPositionRepository
             sql,
             new
             {
+                Mmsi = mmsi,
                 From = from,
                 To = to,
                 MinLat = minLat,
@@ -216,7 +134,7 @@ public class PositionRepository : IPositionRepository
             var lastItem = items[^1];
 
             nextCursor =
-            $"{lastItem.MsgTimestampUtc:O}|{lastItem.Id}";
+                $"{lastItem.MsgTimestampUtc:O}|{lastItem.Id}";
         }
 
         return new PositionHistoryResult

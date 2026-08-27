@@ -20,6 +20,9 @@ builder.Services.AddScoped<IVesselRepository, VesselRepository>();
 builder.Services.AddScoped<IPositionRepository, PositionRepository>();
 builder.Services.AddScoped<IIdentifierResolver, IdentifierResolver>();
 builder.Services.AddScoped<ILatestPositionRepository, LatestPositionRepository>();
+builder.Services.AddScoped<IPositionHistoryRepository, PositionHistoryRepository>();
+
+
 
 var app = builder.Build();
 
