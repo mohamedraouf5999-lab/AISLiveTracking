@@ -4,10 +4,13 @@ using AISLiveTracking.API.Models;
 using AISLiveTracking.API.Services.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
+using System.Security.Claims;
 
 namespace AISLiveTracking.API.Controllers;
 
-[Authorize]
+[Authorize(Roles = "Admin,Operator,ReadOnly")]
+[EnableRateLimiting("ApiKeyRateLimit")]
 [ApiController]
 [Route("api/vessels")]
 public class VesselsController : ControllerBase
@@ -17,21 +20,22 @@ public class VesselsController : ControllerBase
     private readonly IPositionHistoryRepository _positionHistoryRepository;
     private readonly IVesselRepository _vesselRepository;
     private readonly IVesselAnalyticsService _vesselAnalyticsService;
-
+    private readonly IPlanRepository _planRepository;
     public VesselsController(
-        IIdentifierResolver identifierResolver,
-        ILatestPositionRepository latestPositionRepository,
-        IPositionHistoryRepository positionHistoryRepository,
-        IVesselRepository vesselRepository,
-        IVesselAnalyticsService vesselAnalyticsService)
+     IIdentifierResolver identifierResolver,
+     ILatestPositionRepository latestPositionRepository,
+     IPositionHistoryRepository positionHistoryRepository,
+     IVesselRepository vesselRepository,
+     IVesselAnalyticsService vesselAnalyticsService,
+     IPlanRepository planRepository)
     {
         _identifierResolver = identifierResolver;
         _latestPositionRepository = latestPositionRepository;
         _positionHistoryRepository = positionHistoryRepository;
         _vesselRepository = vesselRepository;
         _vesselAnalyticsService = vesselAnalyticsService;
+        _planRepository = planRepository;
     }
-
     [HttpGet("{identifier}/positions/history")]
     public async Task<IActionResult> GetPositionHistory(
         string identifier,
@@ -59,6 +63,41 @@ public class VesselsController : ControllerBase
             {
                 message = "Vessel identifier not found."
             });
+        }
+        var planId = User.FindFirst("plan_id")?.Value;
+
+        if (!int.TryParse(planId, out var parsedPlanId))
+        {
+            return StatusCode(StatusCodes.Status403Forbidden, new
+            {
+                message = "Plan information is missing."
+            });
+        }
+
+        var plan = await _planRepository.GetByIdAsync(parsedPlanId);
+
+        if (plan == null)
+        {
+            return StatusCode(StatusCodes.Status403Forbidden, new
+            {
+                message = "API plan not found."
+            });
+        }
+
+        if (plan.MaxHistoryDays.HasValue)
+        {
+            var minimumAllowedFrom =
+                DateTime.UtcNow.AddDays(-plan.MaxHistoryDays.Value);
+
+            if (!from.HasValue || from.Value < minimumAllowedFrom)
+            {
+                from = minimumAllowedFrom;
+            }
+
+            if (!to.HasValue || to.Value > DateTime.UtcNow)
+            {
+                to = DateTime.UtcNow;
+            }
         }
 
         if (limit < 1 || limit > 1000)
@@ -203,6 +242,20 @@ public class VesselsController : ControllerBase
             });
         }
 
+        var planAnalyticsEnabled =
+            User.FindFirst("plan_name")?.Value is "Pro" or "Enterprise";
+
+        if (!planAnalyticsEnabled)
+        {
+            return StatusCode(
+                StatusCodes.Status403Forbidden,
+                new
+                {
+                    message =
+                        "Analytics is not available for your plan."
+                });
+        }
+
         var result =
             await _vesselAnalyticsService.GetAnalyticsAsync(
                 mmsi.Value,
@@ -212,3 +265,4 @@ public class VesselsController : ControllerBase
         return Ok(result);
     }
 }
+
