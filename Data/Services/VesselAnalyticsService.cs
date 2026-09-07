@@ -199,7 +199,6 @@ public class VesselAnalyticsService : IVesselAnalyticsService
             }
         }
 
-        // Finalize a stopped run that continues until the end of the window.
         if (stoppedRunHours >= _options.IdleMinimumMinutes / 60.0)
         {
             result.IdleHours += stoppedRunHours;

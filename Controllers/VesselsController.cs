@@ -2,10 +2,12 @@ using AISLiveTracking.API.Data.Interfaces;
 using AISLiveTracking.API.Data.Services;
 using AISLiveTracking.API.Models;
 using AISLiveTracking.API.Services.Interfaces;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace AISLiveTracking.API.Controllers;
 
+[Authorize]
 [ApiController]
 [Route("api/vessels")]
 public class VesselsController : ControllerBase
