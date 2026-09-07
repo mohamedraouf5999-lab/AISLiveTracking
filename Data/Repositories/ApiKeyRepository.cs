@@ -34,4 +34,38 @@ public class ApiKeyRepository : IApiKeyRepository
             sql,
             new { KeyHash = keyHash });
     }
+
+    public async Task CreateAsync(
+        Guid clientId,
+        byte[] keyHash,
+        string keyPrefix)
+    {
+        const string sql = """
+            INSERT INTO api_keys
+            (
+                client_id,
+                key_hash,
+                key_prefix,
+                is_active
+            )
+            VALUES
+            (
+                @ClientId,
+                @KeyHash,
+                @KeyPrefix,
+                1
+            )
+        """;
+
+        using var connection = _database.CreateConnection();
+
+        await connection.ExecuteAsync(
+            sql,
+            new
+            {
+                ClientId = clientId,
+                KeyHash = keyHash,
+                KeyPrefix = keyPrefix
+            });
+    }
 }
