@@ -18,9 +18,9 @@ public class AisIngestionBackgroundService : BackgroundService
     private readonly IServiceScopeFactory _scopeFactory;
 
     public AisIngestionBackgroundService(
-        IConfiguration configuration,
-        ILogger<AisIngestionBackgroundService> logger,
-        IServiceScopeFactory scopeFactory)
+IConfiguration configuration,
+ILogger<AisIngestionBackgroundService> logger,
+IServiceScopeFactory scopeFactory)
     {
         _configuration = configuration;
         _logger = logger;

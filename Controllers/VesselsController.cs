@@ -242,8 +242,20 @@ public class VesselsController : ControllerBase
             });
         }
 
-        var planAnalyticsEnabled =
-            User.FindFirst("plan_name")?.Value is "Pro" or "Enterprise";
+        var analyticsEnabled =
+    User.FindFirst("analytics_enabled")?.Value;
+
+        if (!bool.TryParse(analyticsEnabled, out var planAnalyticsEnabled) ||
+            !planAnalyticsEnabled)
+        {
+            return StatusCode(
+                StatusCodes.Status403Forbidden,
+                new
+                {
+                    message =
+                        "Analytics is not available for your plan."
+                });
+        }
 
         if (!planAnalyticsEnabled)
         {
@@ -265,4 +277,3 @@ public class VesselsController : ControllerBase
         return Ok(result);
     }
 }
-

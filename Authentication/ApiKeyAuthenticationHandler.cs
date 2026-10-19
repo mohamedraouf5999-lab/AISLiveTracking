@@ -88,27 +88,27 @@ public class ApiKeyAuthenticationHandler
         }
 
         var claims = new[]
-        {
-            new Claim(
-                ClaimTypes.NameIdentifier,
-                apiKey.Id.ToString()),
+{
+    new Claim(
+        ClaimTypes.NameIdentifier,
+        apiKey.Id.ToString()),
 
-            new Claim(
-                ClaimTypes.Role,
-                "ReadOnly"),
+    new Claim(
+        ClaimTypes.Role,
+        "ReadOnly"),
 
-            new Claim(
-                "client_id",
-                client.Id.ToString()),
+    new Claim(
+        "client_id",
+        client.Id.ToString()),
 
-            new Claim(
-                "plan_id",
-                plan.Id.ToString()),
+    new Claim(
+        "plan_id",
+        plan.Id.ToString()),
 
-            new Claim(
-                "plan_name",
-                plan.Name)
-        };
+    new Claim(
+        "analytics_enabled",
+        plan.AnalyticsEnabled.ToString())
+};
 
         var identity = new ClaimsIdentity(
             claims,

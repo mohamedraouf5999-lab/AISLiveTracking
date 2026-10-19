@@ -35,7 +35,7 @@ public class ApiKeyRepository : IApiKeyRepository
             new { KeyHash = keyHash });
     }
 
-    public async Task CreateAsync(
+    public async Task<Guid> CreateAsync(
         Guid clientId,
         byte[] keyHash,
         string keyPrefix)
@@ -48,6 +48,7 @@ public class ApiKeyRepository : IApiKeyRepository
                 key_prefix,
                 is_active
             )
+            OUTPUT INSERTED.id
             VALUES
             (
                 @ClientId,
@@ -59,7 +60,7 @@ public class ApiKeyRepository : IApiKeyRepository
 
         using var connection = _database.CreateConnection();
 
-        await connection.ExecuteAsync(
+        return await connection.ExecuteScalarAsync<Guid>(
             sql,
             new
             {

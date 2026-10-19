@@ -33,6 +33,16 @@ builder.Services.AddSwaggerGen(options =>
         Description = "Enter your API key."
     });
 
+    options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
+    {
+        Name = "Authorization",
+        Type = SecuritySchemeType.Http,
+        Scheme = "bearer",
+        BearerFormat = "JWT",
+        In = ParameterLocation.Header,
+        Description = "Enter your JWT Bearer token."
+    });
+
     options.AddSecurityRequirement(new OpenApiSecurityRequirement
     {
         [new OpenApiSecurityScheme
@@ -41,6 +51,15 @@ builder.Services.AddSwaggerGen(options =>
             {
                 Type = ReferenceType.SecurityScheme,
                 Id = "ApiKey"
+            }
+        }] = Array.Empty<string>(),
+
+        [new OpenApiSecurityScheme
+        {
+            Reference = new OpenApiReference
+            {
+                Type = ReferenceType.SecurityScheme,
+                Id = "Bearer"
             }
         }] = Array.Empty<string>()
     });
@@ -134,6 +153,7 @@ builder.Services.AddScoped<IUserRepository, UserRepository>();
 
 builder.Services.AddScoped<IPasswordHasher<User>, PasswordHasher<User>>();
 builder.Services.AddScoped<IJwtTokenService, JwtTokenService>();
+builder.Services.AddScoped<AdminBootstrapService>();
 
 builder.Services.AddRateLimiter(options =>
 {
@@ -189,6 +209,7 @@ builder.Services.AddRateLimiter(options =>
 });
 
 var app = builder.Build();
+
 using (var scope = app.Services.CreateScope())
 {
     var adminBootstrapService =

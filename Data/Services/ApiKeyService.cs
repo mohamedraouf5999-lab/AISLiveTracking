@@ -13,7 +13,8 @@ public class ApiKeyService
         _apiKeyRepository = apiKeyRepository;
     }
 
-    public async Task<string> CreateAsync(Guid clientId)
+    public async Task<(Guid Id, string ApiKey, string Prefix)> CreateAsync(
+        Guid clientId)
     {
         var randomBytes = RandomNumberGenerator.GetBytes(32);
 
@@ -27,11 +28,11 @@ public class ApiKeyService
         var keyHash = SHA256.HashData(
             Encoding.UTF8.GetBytes(rawApiKey));
 
-        await _apiKeyRepository.CreateAsync(
+        var id = await _apiKeyRepository.CreateAsync(
             clientId,
             keyHash,
             keyPrefix);
 
-        return rawApiKey;
+        return (id, rawApiKey, keyPrefix);
     }
 }

@@ -17,6 +17,18 @@ public class ApiUsageMiddleware
         IApiUsageRepository apiUsageRepository,
         IPlanRepository planRepository)
     {
+        if (!context.User.Identity?.IsAuthenticated ?? true)
+        {
+            await _next(context);
+            return;
+        }
+
+        if (!context.User.HasClaim(c => c.Type == "plan_id"))
+        {
+            await _next(context);
+            return;
+        }
+
         var apiKeyIdValue =
             context.User.FindFirst(
                 ClaimTypes.NameIdentifier)?.Value;

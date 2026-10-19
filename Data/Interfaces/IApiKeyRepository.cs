@@ -6,7 +6,7 @@ public interface IApiKeyRepository
 {
     Task<ApiKey?> GetByHashAsync(byte[] keyHash);
 
-    Task CreateAsync(
+    Task<Guid> CreateAsync(
         Guid clientId,
         byte[] keyHash,
         string keyPrefix);
