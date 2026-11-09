@@ -5,10 +5,6 @@ using System.Text.Json;
 using AISLiveTracking.API.Models;
 using AISLiveTracking.API.Data.Interfaces;
 
-
-
-
-
 namespace AISLiveTracking.API.BackgroundServices;
 
 public class AisIngestionBackgroundService : BackgroundService
@@ -18,9 +14,9 @@ public class AisIngestionBackgroundService : BackgroundService
     private readonly IServiceScopeFactory _scopeFactory;
 
     public AisIngestionBackgroundService(
-IConfiguration configuration,
-ILogger<AisIngestionBackgroundService> logger,
-IServiceScopeFactory scopeFactory)
+        IConfiguration configuration,
+        ILogger<AisIngestionBackgroundService> logger,
+        IServiceScopeFactory scopeFactory)
     {
         _configuration = configuration;
         _logger = logger;
@@ -38,8 +34,7 @@ IServiceScopeFactory scopeFactory)
 
                 var url = _configuration["AisStream:WebSocketUrl"];
 
-                _logger.LogInformation(
-                    "Connecting to AIS Stream...");
+                _logger.LogInformation("Connecting to AIS Stream...");
 
                 socket.Options.KeepAliveInterval =
                     TimeSpan.FromSeconds(20);
@@ -48,32 +43,24 @@ IServiceScopeFactory scopeFactory)
                     new Uri(url!),
                     stoppingToken);
 
-                _logger.LogInformation(
-                    "Connected successfully.");
+                _logger.LogInformation("Connected successfully.");
 
                 var subscription = new SubscriptionRequest
                 {
                     APIKey = _configuration["AisStream:ApiKey"]!,
 
                     BoundingBoxes = new()
-                {
-                    new()
                     {
-                        new() { -90, -180 },
-                        new() { 90, 180 }
+                        new()
+                        {
+                            new() { -90, -180 },
+                            new() { 90, 180 }
+                        }
                     }
-                }
                 };
 
-                var json =
-                    JsonSerializer.Serialize(subscription);
-
-                _logger.LogInformation(
-                    "Subscription JSON: {Json}",
-                    json);
-
-                var bytes =
-                    Encoding.UTF8.GetBytes(json);
+                var json = JsonSerializer.Serialize(subscription);
+                var bytes = Encoding.UTF8.GetBytes(json);
 
                 await socket.SendAsync(
                     bytes,
@@ -81,53 +68,62 @@ IServiceScopeFactory scopeFactory)
                     true,
                     stoppingToken);
 
-                _logger.LogInformation(
-                    "Subscription sent successfully.");
-
-                _logger.LogInformation(
-                    "Socket state after subscription: {State}",
-                    socket.State);
-
-                _logger.LogInformation(
-                    "Starting ReceiveAsync...");
+                _logger.LogInformation("Subscription sent successfully.");
 
                 var buffer = new byte[8192];
 
                 while (socket.State == WebSocketState.Open)
                 {
-                    _logger.LogInformation(
-                        "Before ReceiveAsync. Socket state: {State}",
-                        socket.State);
+                    using var messageBuffer = new MemoryStream();
+                    WebSocketReceiveResult result;
 
-                    var result = await socket.ReceiveAsync(
-                        new ArraySegment<byte>(buffer),
-                        stoppingToken);
+                    do
+                    {
+                        result = await socket.ReceiveAsync(
+                            new ArraySegment<byte>(buffer),
+                            stoppingToken);
 
-                    _logger.LogInformation(
-                        "ReceiveAsync returned. Type={Type}, Count={Count}",
-                        result.MessageType,
-                        result.Count);
+                        if (result.MessageType == WebSocketMessageType.Close)
+                        {
+                            break;
+                        }
+
+                        if (result.MessageType != WebSocketMessageType.Text &&
+                            result.MessageType != WebSocketMessageType.Binary)
+                        {
+                            throw new InvalidDataException(
+                                $"Unsupported WebSocket message type: {result.MessageType}.");
+                        }
+
+                        if (messageBuffer.Length + result.Count > 1024 * 1024)
+                        {
+                            throw new InvalidDataException(
+                                "AIS message exceeded the 1 MiB limit.");
+                        }
+
+                        messageBuffer.Write(buffer, 0, result.Count);
+                    }
+                    while (!result.EndOfMessage);
 
                     if (result.MessageType == WebSocketMessageType.Close)
                     {
-                        _logger.LogWarning("Server closed the connection.");
+                        _logger.LogWarning(
+                            "Server closed the connection.");
+
                         break;
                     }
 
                     var message = Encoding.UTF8.GetString(
-                        buffer,
-                        0,
-                        result.Count);
-
-                    _logger.LogInformation(
-                        "Received message: {Message}",
-                        message);
+                        messageBuffer.ToArray());
 
                     var envelope =
-                        JsonSerializer.Deserialize<AisMessageEnvelope>(message);
+                        JsonSerializer.Deserialize<AisMessageEnvelope>(
+                            message);
 
                     if (envelope == null)
+                    {
                         continue;
+                    }
 
                     switch (envelope.MessageType)
                     {
@@ -154,9 +150,7 @@ IServiceScopeFactory scopeFactory)
             }
             catch (Exception ex)
             {
-                _logger.LogError(
-                    ex,
-                    "Connection failed.");
+                _logger.LogError(ex, "Connection failed.");
 
                 await Task.Delay(
                     1000,
@@ -168,9 +162,6 @@ IServiceScopeFactory scopeFactory)
     private async Task HandlePositionReport(
         AisMessageEnvelope envelope)
     {
-        _logger.LogInformation(
-            "HandlePositionReport called");
-
         var reportElement =
             envelope.Message.GetProperty("PositionReport");
 
@@ -184,44 +175,34 @@ IServiceScopeFactory scopeFactory)
 
         if (report.UserID <= 0)
         {
-            _logger.LogWarning(
-                "Invalid MMSI.");
-
+            _logger.LogWarning("Invalid MMSI.");
             return;
         }
 
         if (report.UserID.ToString().Length != 9)
         {
-            _logger.LogWarning(
-                "Invalid MMSI length.");
-
+            _logger.LogWarning("Invalid MMSI length.");
             return;
         }
 
         if (report.Latitude < -90 ||
             report.Latitude > 90)
         {
-            _logger.LogWarning(
-                "Invalid Latitude.");
-
+            _logger.LogWarning("Invalid Latitude.");
             return;
         }
 
         if (report.Longitude < -180 ||
             report.Longitude > 180)
         {
-            _logger.LogWarning(
-                "Invalid Longitude.");
-
+            _logger.LogWarning("Invalid Longitude.");
             return;
         }
 
         if (report.Latitude == 91 ||
             report.Longitude == 181)
         {
-            _logger.LogWarning(
-                "Invalid sentinel position.");
-
+            _logger.LogWarning("Invalid sentinel position.");
             return;
         }
 
@@ -258,9 +239,7 @@ IServiceScopeFactory scopeFactory)
 
         if (string.IsNullOrWhiteSpace(metaData.time_utc))
         {
-            _logger.LogWarning(
-                "Missing timestamp.");
-
+            _logger.LogWarning("Missing timestamp.");
             return;
         }
 
@@ -275,8 +254,7 @@ IServiceScopeFactory scopeFactory)
             return;
         }
 
-        using var scope =
-            _scopeFactory.CreateScope();
+        using var scope = _scopeFactory.CreateScope();
 
         var vesselRepository =
             scope.ServiceProvider
@@ -301,23 +279,28 @@ IServiceScopeFactory scopeFactory)
             messageTime);
     }
 
-    private async Task HandleShipStaticData(AisMessageEnvelope envelope)
+    private async Task HandleShipStaticData(
+        AisMessageEnvelope envelope)
     {
-        _logger.LogInformation("HandleShipStaticData called");
+        var staticElement =
+            envelope.Message.GetProperty("ShipStaticData");
 
-        var staticElement = envelope.Message.GetProperty("ShipStaticData");
-
-        var shipData = staticElement.Deserialize<ShipStaticData>();
+        var shipData =
+            staticElement.Deserialize<ShipStaticData>();
 
         if (shipData == null)
         {
-            _logger.LogWarning("Could not deserialize ShipStaticData.");
+            _logger.LogWarning(
+                "Could not deserialize ShipStaticData.");
+
             return;
         }
 
         if (shipData.UserID <= 0)
         {
-            _logger.LogWarning("Invalid MMSI in ShipStaticData.");
+            _logger.LogWarning(
+                "Invalid MMSI in ShipStaticData.");
+
             return;
         }
 
@@ -333,7 +316,8 @@ IServiceScopeFactory scopeFactory)
         using var scope = _scopeFactory.CreateScope();
 
         var vesselRepository =
-            scope.ServiceProvider.GetRequiredService<IVesselRepository>();
+            scope.ServiceProvider
+                .GetRequiredService<IVesselRepository>();
 
         var now = DateTime.UtcNow;
 

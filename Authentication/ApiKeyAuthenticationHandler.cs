@@ -2,9 +2,7 @@ using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Encodings.Web;
-
 using AISLiveTracking.API.Data.Interfaces;
-
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.Extensions.Options;
 
@@ -39,7 +37,9 @@ public class ApiKeyAuthenticationHandler
         {
             rawApiKey = apiKeyHeader.ToString();
         }
-        else if (Request.Headers.TryGetValue("Authorization", out var authorizationHeader))
+        else if (Request.Headers.TryGetValue(
+                     "Authorization",
+                     out var authorizationHeader))
         {
             var authorization = authorizationHeader.ToString();
 
@@ -88,39 +88,23 @@ public class ApiKeyAuthenticationHandler
         }
 
         var claims = new[]
-{
-    new Claim(
-        ClaimTypes.NameIdentifier,
-        apiKey.Id.ToString()),
+        {
+            new Claim(ClaimTypes.NameIdentifier, apiKey.Id.ToString()),
+            new Claim(ClaimTypes.Role, "ReadOnly"),
+            new Claim("client_id", client.Id.ToString()),
+            new Claim("plan_id", plan.Id.ToString()),
+            new Claim(
+                "analytics_enabled",
+                plan.AnalyticsEnabled.ToString()),
+            new Claim(
+                "rate_limit_per_minute",
+                Math.Max(1, plan.RateLimitPerMinute).ToString())
+        };
 
-    new Claim(
-        ClaimTypes.Role,
-        "ReadOnly"),
-
-    new Claim(
-        "client_id",
-        client.Id.ToString()),
-
-    new Claim(
-        "plan_id",
-        plan.Id.ToString()),
-
-    new Claim(
-        "analytics_enabled",
-        plan.AnalyticsEnabled.ToString())
-};
-
-        var identity = new ClaimsIdentity(
-            claims,
-            Scheme.Name);
-
+        var identity = new ClaimsIdentity(claims, Scheme.Name);
         var principal = new ClaimsPrincipal(identity);
-
-        var ticket = new AuthenticationTicket(
-            principal,
-            Scheme.Name);
+        var ticket = new AuthenticationTicket(principal, Scheme.Name);
 
         return AuthenticateResult.Success(ticket);
     }
 }
-
