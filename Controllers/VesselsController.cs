@@ -5,7 +5,6 @@ using AISLiveTracking.API.Services.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
-using System.Security.Claims;
 
 namespace AISLiveTracking.API.Controllers;
 
@@ -21,13 +20,14 @@ public class VesselsController : ControllerBase
     private readonly IVesselRepository _vesselRepository;
     private readonly IVesselAnalyticsService _vesselAnalyticsService;
     private readonly IPlanRepository _planRepository;
+
     public VesselsController(
-     IIdentifierResolver identifierResolver,
-     ILatestPositionRepository latestPositionRepository,
-     IPositionHistoryRepository positionHistoryRepository,
-     IVesselRepository vesselRepository,
-     IVesselAnalyticsService vesselAnalyticsService,
-     IPlanRepository planRepository)
+        IIdentifierResolver identifierResolver,
+        ILatestPositionRepository latestPositionRepository,
+        IPositionHistoryRepository positionHistoryRepository,
+        IVesselRepository vesselRepository,
+        IVesselAnalyticsService vesselAnalyticsService,
+        IPlanRepository planRepository)
     {
         _identifierResolver = identifierResolver;
         _latestPositionRepository = latestPositionRepository;
@@ -36,6 +36,7 @@ public class VesselsController : ControllerBase
         _vesselAnalyticsService = vesselAnalyticsService;
         _planRepository = planRepository;
     }
+
     [HttpGet("{identifier}/positions/history")]
     public async Task<IActionResult> GetPositionHistory(
         string identifier,
@@ -64,24 +65,29 @@ public class VesselsController : ControllerBase
                 message = "Vessel identifier not found."
             });
         }
+
         var planId = User.FindFirst("plan_id")?.Value;
 
         if (!int.TryParse(planId, out var parsedPlanId))
         {
-            return StatusCode(StatusCodes.Status403Forbidden, new
-            {
-                message = "Plan information is missing."
-            });
+            return StatusCode(
+                StatusCodes.Status403Forbidden,
+                new
+                {
+                    message = "Plan information is missing."
+                });
         }
 
         var plan = await _planRepository.GetByIdAsync(parsedPlanId);
 
         if (plan == null)
         {
-            return StatusCode(StatusCodes.Status403Forbidden, new
-            {
-                message = "API plan not found."
-            });
+            return StatusCode(
+                StatusCodes.Status403Forbidden,
+                new
+                {
+                    message = "API plan not found."
+                });
         }
 
         if (plan.MaxHistoryDays.HasValue)
@@ -98,6 +104,17 @@ public class VesselsController : ControllerBase
             {
                 to = DateTime.UtcNow;
             }
+        }
+
+        if (from.HasValue &&
+            to.HasValue &&
+            from.Value > to.Value)
+        {
+            return BadRequest(new
+            {
+                message =
+                    "Requested range is outside the history allowed by your plan."
+            });
         }
 
         if (limit < 1 || limit > 1000)
@@ -125,7 +142,7 @@ public class VesselsController : ControllerBase
 
         if (from.HasValue &&
             to.HasValue &&
-            from > to)
+            from.Value > to.Value)
         {
             return BadRequest(new
             {
@@ -220,7 +237,7 @@ public class VesselsController : ControllerBase
             });
         }
 
-        if (from > to)
+        if (from.Value > to.Value)
         {
             return BadRequest(new
             {
@@ -229,10 +246,17 @@ public class VesselsController : ControllerBase
             });
         }
 
-        var mmsi =
-            await _identifierResolver.ResolveMmsiAsync(
-                identifier,
-                idType);
+        if ((to.Value - from.Value) > TimeSpan.FromDays(31))
+        {
+            return BadRequest(new
+            {
+                message = "Analytics range cannot exceed 31 days."
+            });
+        }
+
+        var mmsi = await _identifierResolver.ResolveMmsiAsync(
+            identifier,
+            idType);
 
         if (mmsi == null)
         {
@@ -243,21 +267,12 @@ public class VesselsController : ControllerBase
         }
 
         var analyticsEnabled =
-    User.FindFirst("analytics_enabled")?.Value;
+            User.FindFirst("analytics_enabled")?.Value;
 
-        if (!bool.TryParse(analyticsEnabled, out var planAnalyticsEnabled) ||
+        if (!bool.TryParse(
+                analyticsEnabled,
+                out var planAnalyticsEnabled) ||
             !planAnalyticsEnabled)
-        {
-            return StatusCode(
-                StatusCodes.Status403Forbidden,
-                new
-                {
-                    message =
-                        "Analytics is not available for your plan."
-                });
-        }
-
-        if (!planAnalyticsEnabled)
         {
             return StatusCode(
                 StatusCodes.Status403Forbidden,

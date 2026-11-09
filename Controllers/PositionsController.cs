@@ -1,9 +1,13 @@
 using AISLiveTracking.API.Data.Interfaces;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.RateLimiting;
 
 namespace AISLiveTracking.API.Controllers;
 
 [ApiController]
+[Authorize(Roles = "Admin,Operator,ReadOnly")]
+[EnableRateLimiting("ApiKeyRateLimit")]
 [Route("api/positions")]
 public class PositionsController : ControllerBase
 {
@@ -37,8 +41,14 @@ public class PositionsController : ControllerBase
             });
         }
 
-        if (!string.Equals(sort, "asc", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(sort, "desc", StringComparison.OrdinalIgnoreCase))
+        if (!string.Equals(
+                sort,
+                "asc",
+                StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(
+                sort,
+                "desc",
+                StringComparison.OrdinalIgnoreCase))
         {
             return BadRequest(new
             {
@@ -46,11 +56,27 @@ public class PositionsController : ControllerBase
             });
         }
 
-        if (from.HasValue && to.HasValue && from > to)
+        if (from.HasValue &&
+            to.HasValue &&
+            from > to)
         {
             return BadRequest(new
             {
                 message = "'from' must be earlier than or equal to 'to'."
+            });
+        }
+
+        if (!ValidRange(minLat, maxLat, -90, 90) ||
+            !ValidRange(minLon, maxLon, -180, 180) ||
+            (minSog.HasValue && minSog < 0) ||
+            (maxSog.HasValue && maxSog < 0) ||
+            (minSog.HasValue &&
+             maxSog.HasValue &&
+             minSog > maxSog))
+        {
+            return BadRequest(new
+            {
+                message = "Invalid coordinate or speed range."
             });
         }
 
@@ -70,4 +96,17 @@ public class PositionsController : ControllerBase
 
         return Ok(result);
     }
+
+    private static bool ValidRange(
+        double? min,
+        double? max,
+        double lower,
+        double upper) =>
+        (!min.HasValue ||
+         min.Value >= lower && min.Value <= upper) &&
+        (!max.HasValue ||
+         max.Value >= lower && max.Value <= upper) &&
+        (!min.HasValue ||
+         !max.HasValue ||
+         min.Value <= max.Value);
 }
