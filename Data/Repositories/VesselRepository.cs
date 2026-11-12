@@ -17,7 +17,7 @@ public class VesselRepository : IVesselRepository
 {
     using var connection = _database.CreateConnection();
 
-    const string sql = """
+   const string sql = """
         SELECT
             mmsi AS Mmsi,
             imo AS Imo,
@@ -33,7 +33,7 @@ public class VesselRepository : IVesselRepository
             eta AS Eta,
             first_seen_utc AS FirstSeenUtc,
             last_seen_utc AS LastSeenUtc,
-            updated_utc AS UpdatedUtc
+            up dated_utc AS UpdatedUtc
         FROM vessels
         WHERE mmsi = @Mmsi;
         """;
@@ -72,33 +72,55 @@ public async Task<Vessel?> GetByImoAsync(int imo)
         sql,
         new { Imo = imo });
 }
-    public async Task UpsertAsync(Vessel vessel)
+   public async Task UpsertAsync(Vessel vessel)
 {
     using var connection = _database.CreateConnection();
 
     const string sql = """
-        MERGE vessels AS target
-        USING (SELECT @Mmsi AS mmsi) AS source
-        ON target.mmsi = source.mmsi
+        SET XACT_ABORT ON;
+        BEGIN TRANSACTION;
 
-        WHEN MATCHED THEN
-            UPDATE SET
-                imo = COALESCE(@Imo, target.imo),
-                name = COALESCE(@VesselName, target.name),
-                call_sign = COALESCE(@CallSign, target.call_sign),
-                ship_type = COALESCE(@ShipType, target.ship_type),
-                dim_to_bow = COALESCE(@DimToBow, target.dim_to_bow),
-                dim_to_stern = COALESCE(@DimToStern, target.dim_to_stern),
-                dim_to_port = COALESCE(@DimToPort, target.dim_to_port),
-                dim_to_starboard = COALESCE(@DimToStarboard, target.dim_to_starboard),
-                draught = COALESCE(@Draught, target.draught),
-                destination = COALESCE(@Destination, target.destination),
-                eta = COALESCE(@Eta, target.eta),
+        DECLARE @EffectiveImo int = @Imo;
+
+        IF @EffectiveImo IS NOT NULL
+           AND EXISTS
+           (
+               SELECT 1
+               FROM dbo.vessels WITH (UPDLOCK, HOLDLOCK)
+               WHERE imo = @EffectiveImo
+                 AND mmsi <> @Mmsi
+           )
+        BEGIN
+            SET @EffectiveImo = NULL;
+        END;
+
+        IF EXISTS
+        (
+            SELECT 1
+            FROM dbo.vessels WITH (UPDLOCK, HOLDLOCK)
+            WHERE mmsi = @Mmsi
+        )
+        BEGIN
+            UPDATE dbo.vessels
+            SET
+                imo = COALESCE(@EffectiveImo, imo),
+                name = COALESCE(@VesselName, name),
+                call_sign = COALESCE(@CallSign, call_sign),
+                ship_type = COALESCE(@ShipType, ship_type),
+                dim_to_bow = COALESCE(@DimToBow, dim_to_bow),
+                dim_to_stern = COALESCE(@DimToStern, dim_to_stern),
+                dim_to_port = COALESCE(@DimToPort, dim_to_port),
+                dim_to_starboard = COALESCE(@DimToStarboard, dim_to_starboard),
+                draught = COALESCE(@Draught, draught),
+                destination = COALESCE(@Destination, destination),
+                eta = COALESCE(@Eta, eta),
                 last_seen_utc = @LastSeenUtc,
                 updated_utc = SYSUTCDATETIME()
-
-        WHEN NOT MATCHED THEN
-            INSERT
+            WHERE mmsi = @Mmsi;
+        END
+        ELSE
+        BEGIN
+            INSERT INTO dbo.vessels
             (
                 mmsi,
                 imo,
@@ -119,7 +141,7 @@ public async Task<Vessel?> GetByImoAsync(int imo)
             VALUES
             (
                 @Mmsi,
-                @Imo,
+                @EffectiveImo,
                 @VesselName,
                 @CallSign,
                 @ShipType,
@@ -134,6 +156,9 @@ public async Task<Vessel?> GetByImoAsync(int imo)
                 @LastSeenUtc,
                 SYSUTCDATETIME()
             );
+        END;
+
+        COMMIT TRANSACTION;
         """;
 
     await connection.ExecuteAsync(sql, vessel);

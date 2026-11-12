@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Hosting;
+using System.Globalization;
 using System.Net.WebSockets;
 using System.Text;
 using System.Text.Json;
@@ -26,8 +27,12 @@ public class AisIngestionBackgroundService : BackgroundService
     protected override async Task ExecuteAsync(
         CancellationToken stoppingToken)
     {
+        var reconnectDelay = TimeSpan.FromSeconds(1);
+
         while (!stoppingToken.IsCancellationRequested)
         {
+            var connectedAtUtc = DateTime.MinValue;
+
             try
             {
                 using var socket = new ClientWebSocket();
@@ -43,6 +48,8 @@ public class AisIngestionBackgroundService : BackgroundService
                     new Uri(url!),
                     stoppingToken);
 
+                connectedAtUtc = DateTime.UtcNow;
+
                 _logger.LogInformation("Connected successfully.");
 
                 var subscription = new SubscriptionRequest
@@ -56,6 +63,12 @@ public class AisIngestionBackgroundService : BackgroundService
                             new() { -90, -180 },
                             new() { 90, 180 }
                         }
+                    },
+
+                    FilterMessageTypes = new()
+                    {
+                        "PositionReport",
+                        "ShipStaticData"
                     }
                 };
 
@@ -127,6 +140,11 @@ public class AisIngestionBackgroundService : BackgroundService
 
                     switch (envelope.MessageType)
                     {
+                        case "SubscriptionConfirmation":
+                            _logger.LogInformation(
+                                "AIS subscription confirmed.");
+                            break;
+
                         case "PositionReport":
                             await HandlePositionReport(envelope);
                             break;
@@ -144,18 +162,40 @@ public class AisIngestionBackgroundService : BackgroundService
                 }
             }
             catch (OperationCanceledException)
+                when (stoppingToken.IsCancellationRequested)
             {
                 _logger.LogInformation(
                     "Background service is stopping.");
+
+                return;
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Connection failed.");
-
-                await Task.Delay(
-                    1000,
-                    stoppingToken);
+                _logger.LogError(
+                    ex,
+                    "AIS connection or message processing failed.");
             }
+
+            if (stoppingToken.IsCancellationRequested)
+            {
+                return;
+            }
+
+            if (connectedAtUtc != DateTime.MinValue &&
+                DateTime.UtcNow - connectedAtUtc >=
+                TimeSpan.FromSeconds(30))
+            {
+                reconnectDelay = TimeSpan.FromSeconds(1);
+            }
+
+            _logger.LogWarning(
+                "Reconnecting in {DelaySeconds} seconds.",
+                reconnectDelay.TotalSeconds);
+
+            await Task.Delay(reconnectDelay, stoppingToken);
+
+            reconnectDelay = TimeSpan.FromSeconds(
+                Math.Min(reconnectDelay.TotalSeconds * 2, 30));
         }
     }
 
@@ -243,12 +283,26 @@ public class AisIngestionBackgroundService : BackgroundService
             return;
         }
 
+        var timestamp = metaData.time_utc.Replace(" UTC", "");
+
         if (!DateTime.TryParse(
-                metaData.time_utc.Replace(" UTC", ""),
+                timestamp,
+                CultureInfo.InvariantCulture,
+                DateTimeStyles.AssumeUniversal |
+                DateTimeStyles.AdjustToUniversal,
                 out var messageTime))
         {
             _logger.LogWarning(
                 "Invalid timestamp: {Timestamp}",
+                metaData.time_utc);
+
+            return;
+        }
+
+        if (messageTime > DateTime.UtcNow.AddMinutes(5))
+        {
+            _logger.LogWarning(
+                "Position report timestamp is too far in the future: {Timestamp}",
                 metaData.time_utc);
 
             return;
