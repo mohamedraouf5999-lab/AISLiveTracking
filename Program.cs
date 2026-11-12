@@ -144,6 +144,9 @@ builder.Services.Configure<AnalyticsOptions>(
 
 builder.Services.AddScoped<IVesselRepository, VesselRepository>();
 builder.Services.AddScoped<IPositionRepository, PositionRepository>();
+builder.Services.AddScoped<
+    IIngestionDeadLetterRepository,
+    IngestionDeadLetterRepository>();
 
 builder.Services.AddScoped<IApiKeyRepository, ApiKeyRepository>();
 builder.Services.AddScoped<IApiClientRepository, ApiClientRepository>();

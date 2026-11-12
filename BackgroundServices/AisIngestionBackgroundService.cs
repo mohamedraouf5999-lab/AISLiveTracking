@@ -374,15 +374,26 @@ public class AisIngestionBackgroundService : BackgroundService
                 .GetRequiredService<IVesselRepository>();
 
         var now = DateTime.UtcNow;
+        int? validatedImo = null;
+
+        if (shipData.ImoNumber > 0)
+        {
+            if (IsValidImo(shipData.ImoNumber))
+            {
+                validatedImo = shipData.ImoNumber;
+            }
+            else
+            {
+                _logger.LogWarning(
+                    "Invalid IMO checksum for MMSI {Mmsi}. IMO will be stored as null.",
+                    shipData.UserID);
+            }
+        }
 
         var vessel = new Vessel
         {
             Mmsi = shipData.UserID,
-
-            Imo = shipData.ImoNumber > 0
-                ? shipData.ImoNumber
-                : null,
-
+            Imo = validatedImo,
             VesselName = shipData.Name,
             CallSign = shipData.CallSign,
 
@@ -400,7 +411,6 @@ public class AisIngestionBackgroundService : BackgroundService
                 : null,
 
             Destination = shipData.Destination,
-
             FirstSeenUtc = now,
             LastSeenUtc = now
         };
@@ -441,5 +451,23 @@ public class AisIngestionBackgroundService : BackgroundService
             vessel.Mmsi,
             vessel.Imo,
             vessel.VesselName);
+    }
+
+    private static bool IsValidImo(int imo)
+    {
+        if (imo < 1_000_000 || imo > 9_999_999)
+        {
+            return false;
+        }
+
+        var digits = imo.ToString(CultureInfo.InvariantCulture);
+        var sum = 0;
+
+        for (var i = 0; i < 6; i++)
+        {
+            sum += (digits[i] - '0') * (7 - i);
+        }
+
+        return sum % 10 == digits[6] - '0';
     }
 }
