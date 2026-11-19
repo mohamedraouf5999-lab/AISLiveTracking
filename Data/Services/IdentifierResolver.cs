@@ -1,4 +1,5 @@
 using AISLiveTracking.API.Data.Interfaces;
+using System.Globalization;
 
 namespace AISLiveTracking.API.Data.Services;
 
@@ -11,55 +12,57 @@ public class IdentifierResolver : IIdentifierResolver
         _vesselRepository = vesselRepository;
     }
 
-   public async Task<long?> ResolveMmsiAsync(string identifier, string? idType = null)
-{
-    if (string.IsNullOrWhiteSpace(identifier))
+    public bool IsValidIdentifier(
+        string identifier,
+        string? idType = null)
     {
-        return null;
+        if (string.IsNullOrEmpty(identifier) ||
+            !identifier.All(char.IsAsciiDigit))
+        {
+            return false;
+        }
+
+        var normalizedIdType = string.IsNullOrWhiteSpace(idType)
+            ? null
+            : idType.Trim().ToLowerInvariant();
+
+        return normalizedIdType switch
+        {
+            "mmsi" => identifier.Length == 9,
+            "imo" => identifier.Length == 7,
+            null => identifier.Length == 7 || identifier.Length == 9,
+            _ => false
+        };
     }
 
-    identifier = identifier.Trim();
-
-    if (!long.TryParse(identifier, out var value))
+    public async Task<long?> ResolveMmsiAsync(
+        string identifier,
+        string? idType = null)
     {
-        return null;
-    }
+        if (!IsValidIdentifier(identifier, idType) ||
+            !long.TryParse(
+                identifier,
+                NumberStyles.None,
+                CultureInfo.InvariantCulture,
+                out var value))
+        {
+            return null;
+        }
 
-    if (!string.IsNullOrWhiteSpace(idType))
-    {
-        idType = idType.Trim().ToLowerInvariant();
+        var normalizedIdType = string.IsNullOrWhiteSpace(idType)
+            ? null
+            : idType.Trim().ToLowerInvariant();
 
-        if (idType == "mmsi")
+        if (normalizedIdType == "mmsi" ||
+            (normalizedIdType == null && identifier.Length == 9))
         {
             var vessel = await _vesselRepository.GetByMmsiAsync(value);
-
             return vessel?.Mmsi;
         }
 
-        if (idType == "imo")
-        {
-            var vessel = await _vesselRepository.GetByImoAsync((int)value);
+        var vesselByImo =
+            await _vesselRepository.GetByImoAsync((int)value);
 
-            return vessel?.Mmsi;
-        }
-
-        return null;
+        return vesselByImo?.Mmsi;
     }
-
-    if (identifier.Length == 9)
-    {
-        var vessel = await _vesselRepository.GetByMmsiAsync(value);
-
-        return vessel?.Mmsi;
-    }
-
-    if (identifier.Length == 7)
-    {
-        var vessel = await _vesselRepository.GetByImoAsync((int)value);
-
-        return vessel?.Mmsi;
-    }
-
-    return null;
-}
 }

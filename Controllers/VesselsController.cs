@@ -37,6 +37,60 @@ public class VesselsController : ControllerBase
         _planRepository = planRepository;
     }
 
+    [HttpGet("{identifier}")]
+    public async Task<IActionResult> GetVessel(
+        string identifier,
+        [FromQuery] string? idType = null)
+    {
+        if (!_identifierResolver.IsValidIdentifier(identifier, idType))
+        {
+            return BadRequest(new
+            {
+                message = "Identifier must be a 7-digit IMO or 9-digit MMSI, and idType must match."
+            });
+        }
+
+        var mmsi = await _identifierResolver.ResolveMmsiAsync(
+            identifier,
+            idType);
+
+        if (mmsi == null)
+        {
+            return NotFound(new
+            {
+                message = "Vessel identifier not found."
+            });
+        }
+
+        var vessel = await _vesselRepository.GetByMmsiAsync(mmsi.Value);
+
+        if (vessel == null)
+        {
+            return NotFound(new
+            {
+                message = "Vessel identifier not found."
+            });
+        }
+
+        return Ok(new
+        {
+            mmsi = vessel.Mmsi,
+            imo = vessel.Imo,
+            name = vessel.VesselName,
+            callSign = vessel.CallSign,
+            shipType = vessel.ShipType,
+            dimToBow = vessel.DimToBow,
+            dimToStern = vessel.DimToStern,
+            dimToPort = vessel.DimToPort,
+            dimToStarboard = vessel.DimToStarboard,
+            draught = vessel.Draught,
+            destination = vessel.Destination,
+            eta = vessel.Eta,
+            firstSeenUtc = vessel.FirstSeenUtc,
+            lastSeenUtc = vessel.LastSeenUtc
+        });
+    }
+
     [HttpGet("{identifier}/positions/history")]
     public async Task<IActionResult> GetPositionHistory(
         string identifier,
@@ -173,6 +227,14 @@ public class VesselsController : ControllerBase
         string identifier,
         [FromQuery] string? idType = null)
     {
+        if (!_identifierResolver.IsValidIdentifier(identifier, idType))
+        {
+            return BadRequest(new
+            {
+                message = "Identifier must be a 7-digit IMO or 9-digit MMSI, and idType must match."
+            });
+        }
+
         var mmsi = await _identifierResolver.ResolveMmsiAsync(
             identifier,
             idType);

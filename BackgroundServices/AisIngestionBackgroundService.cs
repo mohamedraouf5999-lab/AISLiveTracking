@@ -1,5 +1,6 @@
 using AISLiveTracking.API.Data.Interfaces;
 using AISLiveTracking.API.Models;
+using AISLiveTracking.API.Services;
 using Microsoft.Extensions.Hosting;
 using System.Globalization;
 using System.Net.WebSockets;
@@ -270,8 +271,7 @@ public class AisIngestionBackgroundService : BackgroundService
             return;
         }
 
-        if (report.UserID < 100_000_000 ||
-            report.UserID > 999_999_999)
+        if (!PositionValidator.IsValidMmsi(report.UserID))
         {
             await RejectMessageAsync(
                 rawPayload,
@@ -280,8 +280,9 @@ public class AisIngestionBackgroundService : BackgroundService
             return;
         }
 
-        if (report.Latitude == 91 ||
-            report.Longitude == 181)
+        if (PositionValidator.IsUnavailableAisFix(
+                report.Latitude,
+                report.Longitude))
         {
             await RejectMessageAsync(
                 rawPayload,
@@ -290,8 +291,7 @@ public class AisIngestionBackgroundService : BackgroundService
             return;
         }
 
-        if (report.Latitude < -90 ||
-            report.Latitude > 90)
+        if (!PositionValidator.IsValidLatitude(report.Latitude))
         {
             await RejectMessageAsync(
                 rawPayload,
@@ -300,8 +300,7 @@ public class AisIngestionBackgroundService : BackgroundService
             return;
         }
 
-        if (report.Longitude < -180 ||
-            report.Longitude > 180)
+        if (!PositionValidator.IsValidLongitude(report.Longitude))
         {
             await RejectMessageAsync(
                 rawPayload,
@@ -486,7 +485,7 @@ public class AisIngestionBackgroundService : BackgroundService
 
         if (shipData.ImoNumber > 0)
         {
-            if (IsValidImo(shipData.ImoNumber))
+            if (ImoValidator.IsValid(shipData.ImoNumber))
             {
                 validatedImo = shipData.ImoNumber;
             }
@@ -608,24 +607,5 @@ public class AisIngestionBackgroundService : BackgroundService
             positions,
             vessels,
             rejected);
-    }
-
-    private static bool IsValidImo(int imo)
-    {
-        if (imo < 1_000_000 ||
-            imo > 9_999_999)
-        {
-            return false;
-        }
-
-        var digits = imo.ToString(CultureInfo.InvariantCulture);
-        var sum = 0;
-
-        for (var i = 0; i < 6; i++)
-        {
-            sum += (digits[i] - '0') * (7 - i);
-        }
-
-        return sum % 10 == digits[6] - '0';
     }
 }
