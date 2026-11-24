@@ -33,7 +33,7 @@ public class VesselRepository : IVesselRepository
             eta AS Eta,
             first_seen_utc AS FirstSeenUtc,
             last_seen_utc AS LastSeenUtc,
-            up dated_utc AS UpdatedUtc
+            updated_utc AS UpdatedUtc
         FROM vessels
         WHERE mmsi = @Mmsi;
         """;

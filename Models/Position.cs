@@ -1,7 +1,11 @@
+using System.Text.Json.Serialization;
+
 namespace AISLiveTracking.API.Models;
 
 public class Position
 {
+    private DateTime _msgTimestampUtc;
+
     public long Id { get; set; }
 
     public long Mmsi { get; set; }
@@ -22,7 +26,13 @@ public class Position
 
     public bool PositionAccuracy { get; set; }
 
-    public DateTime MsgTimestampUtc { get; set; }
+    [JsonPropertyName("timestampUtc")]
+    public DateTime MsgTimestampUtc
+    {
+        get => _msgTimestampUtc;
+        set => _msgTimestampUtc =
+            DateTime.SpecifyKind(value, DateTimeKind.Utc);
+    }
 
     public DateTime ReceivedUtc { get; set; }
 }

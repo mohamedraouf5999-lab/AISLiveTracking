@@ -76,21 +76,30 @@ public class VesselsController : ControllerBase
         {
             mmsi = vessel.Mmsi,
             imo = vessel.Imo,
-            name = vessel.VesselName,
-            callSign = vessel.CallSign,
+            name = vessel.VesselName?.Trim(),
+            callSign = vessel.CallSign?.Trim(),
             shipType = vessel.ShipType,
             dimToBow = vessel.DimToBow,
             dimToStern = vessel.DimToStern,
             dimToPort = vessel.DimToPort,
             dimToStarboard = vessel.DimToStarboard,
             draught = vessel.Draught,
-            destination = vessel.Destination,
-            eta = vessel.Eta,
-            firstSeenUtc = vessel.FirstSeenUtc,
-            lastSeenUtc = vessel.LastSeenUtc
+            destination = vessel.Destination?.Trim(),
+            eta = vessel.Eta.HasValue
+                ? DateTime.SpecifyKind(
+                    vessel.Eta.Value,
+                    DateTimeKind.Utc)
+                : (DateTime?)null,
+            firstSeenUtc = DateTime.SpecifyKind(
+                vessel.FirstSeenUtc,
+                DateTimeKind.Utc),
+            lastSeenUtc = DateTime.SpecifyKind(
+                vessel.LastSeenUtc,
+                DateTimeKind.Utc)
         });
     }
 
+    [HttpGet("{identifier}/positions")]
     [HttpGet("{identifier}/positions/history")]
     public async Task<IActionResult> GetPositionHistory(
         string identifier,
@@ -118,6 +127,62 @@ public class VesselsController : ControllerBase
             {
                 message = "Vessel identifier not found."
             });
+        }
+
+        if (from.HasValue &&
+            to.HasValue &&
+            from.Value > to.Value)
+        {
+            return BadRequest(new
+            {
+                message = "'from' must be earlier than or equal to 'to'."
+            });
+        }
+
+        var boundingBoxValuesCount =
+            (minLat.HasValue ? 1 : 0) +
+            (maxLat.HasValue ? 1 : 0) +
+            (minLon.HasValue ? 1 : 0) +
+            (maxLon.HasValue ? 1 : 0);
+
+        if (boundingBoxValuesCount != 0 &&
+            boundingBoxValuesCount != 4)
+        {
+            return BadRequest(new
+            {
+                message = "Provide all four bounding box values or none."
+            });
+        }
+
+        if (boundingBoxValuesCount == 4 &&
+            (minLat < -90 ||
+             maxLat > 90 ||
+             minLon < -180 ||
+             maxLon > 180 ||
+             minLat > maxLat ||
+             minLon > maxLon))
+        {
+            return BadRequest(new
+            {
+                message = "Bounding box coordinates are invalid."
+            });
+        }
+
+        if (!string.IsNullOrWhiteSpace(navStatus))
+        {
+            var navStatusCodes = navStatus.Split(
+                ',',
+                StringSplitOptions.TrimEntries);
+
+            if (navStatusCodes.Any(code =>
+                    !byte.TryParse(code, out var parsedStatus) ||
+                    parsedStatus > 15))
+            {
+                return BadRequest(new
+                {
+                    message = "navStatus must contain codes from 0 to 15, separated by commas."
+                });
+            }
         }
 
         var planId = User.FindFirst("plan_id")?.Value;
@@ -171,13 +236,15 @@ public class VesselsController : ControllerBase
             });
         }
 
-        if (limit < 1 || limit > 1000)
+        if (limit < 0)
         {
             return BadRequest(new
             {
-                message = "Limit must be between 1 and 1000."
+                message = "Limit cannot be negative."
             });
         }
+
+        limit = Math.Min(limit, 1000);
 
         if (!string.Equals(
                 sort,
@@ -194,32 +261,32 @@ public class VesselsController : ControllerBase
             });
         }
 
-        if (from.HasValue &&
-            to.HasValue &&
-            from.Value > to.Value)
+        try
+        {
+            var result = await _positionHistoryRepository.GetHistoryAsync(
+                mmsi.Value,
+                from,
+                to,
+                minLat,
+                maxLat,
+                minLon,
+                maxLon,
+                navStatus,
+                minSog,
+                maxSog,
+                sort,
+                limit,
+                cursor);
+
+            return Ok(result);
+        }
+        catch (ArgumentException)
         {
             return BadRequest(new
             {
-                message = "'from' must be earlier than or equal to 'to'."
+                message = "Invalid cursor."
             });
         }
-
-        var result = await _positionHistoryRepository.GetHistoryAsync(
-            mmsi.Value,
-            from,
-            to,
-            minLat,
-            maxLat,
-            minLon,
-            maxLon,
-            navStatus,
-            minSog,
-            maxSog,
-            sort,
-            limit,
-            cursor);
-
-        return Ok(result);
     }
 
     [HttpGet("{identifier}/positions/latest")]
@@ -266,7 +333,7 @@ public class VesselsController : ControllerBase
         {
             Mmsi = position.Mmsi,
             Imo = vessel?.Imo,
-            Name = vessel?.VesselName,
+            Name = vessel?.VesselName?.Trim(),
             Latitude = position.Latitude,
             Longitude = position.Longitude,
             Sog = position.Sog,
@@ -274,11 +341,15 @@ public class VesselsController : ControllerBase
             NavStatus = position.NavStatus,
             NavStatusText =
                 NavStatusMapper.GetText(position.NavStatus),
-            TimestampUtc = position.MsgTimestampUtc,
+            TimestampUtc = DateTime.SpecifyKind(
+                position.MsgTimestampUtc,
+                DateTimeKind.Utc),
             AgeSeconds =
                 (long)(
                     DateTime.UtcNow -
-                    position.MsgTimestampUtc).TotalSeconds
+                    DateTime.SpecifyKind(
+                        position.MsgTimestampUtc,
+                        DateTimeKind.Utc)).TotalSeconds
         };
 
         return Ok(response);

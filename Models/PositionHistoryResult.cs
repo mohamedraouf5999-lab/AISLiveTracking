@@ -5,4 +5,6 @@ public class PositionHistoryResult
     public List<Position> Items { get; set; } = new();
 
     public string? NextCursor { get; set; }
+
+    public int Count => Items.Count;
 }

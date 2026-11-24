@@ -14,7 +14,9 @@ public class PositionRepository : IPositionRepository
         _database = database;
     }
 
-    public async Task InsertAsync(PositionReport position, DateTime messageTime)
+    public async Task InsertAsync(
+        PositionReport position,
+        DateTime messageTime)
     {
         using var connection = _database.CreateConnection();
 
@@ -97,7 +99,8 @@ public class PositionRepository : IPositionRepository
         double? maxLat,
         double? minLon,
         double? maxLon,
-        int? navStatus,
+        long[]? mmsis,
+        int[]? navStatusCodes,
         double? minSog,
         double? maxSog,
         string sort,
@@ -110,7 +113,7 @@ public class PositionRepository : IPositionRepository
             StringComparison.OrdinalIgnoreCase);
 
         DateTime? cursorTimestamp = null;
-        int? cursorId = null;
+        long? cursorId = null;
 
         if (!string.IsNullOrWhiteSpace(cursor))
         {
@@ -122,9 +125,9 @@ public class PositionRepository : IPositionRepository
                     CultureInfo.InvariantCulture,
                     DateTimeStyles.RoundtripKind,
                     out var parsedTimestamp) ||
-                !int.TryParse(
+                !long.TryParse(
                     parts[1],
-                    NumberStyles.Integer,
+                    NumberStyles.None,
                     CultureInfo.InvariantCulture,
                     out var parsedId))
             {
@@ -134,6 +137,14 @@ public class PositionRepository : IPositionRepository
             cursorTimestamp = parsedTimestamp;
             cursorId = parsedId;
         }
+
+        var mmsiFilter = mmsis is { Length: > 0 }
+            ? "AND mmsi IN @Mmsis"
+            : string.Empty;
+
+        var navStatusFilter = navStatusCodes is { Length: > 0 }
+            ? "AND nav_status IN @NavStatusCodes"
+            : string.Empty;
 
         var cursorCondition = isAscending
             ? """
@@ -162,7 +173,7 @@ public class PositionRepository : IPositionRepository
             : "ORDER BY msg_timestamp_utc DESC, id DESC";
 
         var sql = $"""
-            SELECT TOP (@Limit)
+            SELECT TOP (@FetchLimit)
                 id AS Id,
                 mmsi AS Mmsi,
                 latitude AS Latitude,
@@ -177,14 +188,15 @@ public class PositionRepository : IPositionRepository
                 received_utc AS ReceivedUtc
             FROM positions
             WHERE (@From IS NULL OR msg_timestamp_utc >= @From)
-              AND (@To IS NULL OR msg_timestamp_utc <= @To)
+              AND (@To IS NULL OR msg_timestamp_utc < @To)
               AND (@MinLat IS NULL OR latitude >= @MinLat)
               AND (@MaxLat IS NULL OR latitude <= @MaxLat)
               AND (@MinLon IS NULL OR longitude >= @MinLon)
               AND (@MaxLon IS NULL OR longitude <= @MaxLon)
-              AND (@NavStatus IS NULL OR nav_status = @NavStatus)
               AND (@MinSog IS NULL OR sog >= @MinSog)
               AND (@MaxSog IS NULL OR sog <= @MaxSog)
+              {mmsiFilter}
+              {navStatusFilter}
               {cursorCondition}
             {orderBy};
             """;
@@ -201,22 +213,29 @@ public class PositionRepository : IPositionRepository
                 MaxLat = maxLat,
                 MinLon = minLon,
                 MaxLon = maxLon,
-                NavStatus = navStatus,
+                Mmsis = mmsis,
+                NavStatusCodes = navStatusCodes,
                 MinSog = minSog,
                 MaxSog = maxSog,
                 CursorTimestamp = cursorTimestamp,
                 CursorId = cursorId,
-                Limit = limit
+                FetchLimit = limit + 1
             })).AsList();
+
+        var hasMore = items.Count > limit;
+
+        if (hasMore)
+        {
+            items.RemoveAt(items.Count - 1);
+        }
 
         string? nextCursor = null;
 
-        if (items.Count == limit && items.Count > 0)
+        if (hasMore && items.Count > 0)
         {
             var lastItem = items[^1];
-
             nextCursor =
-            $"{lastItem.MsgTimestampUtc:O}|{lastItem.Id}";
+                $"{lastItem.MsgTimestampUtc:O}|{lastItem.Id}";
         }
 
         return new PositionHistoryResult
