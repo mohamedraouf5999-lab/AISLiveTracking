@@ -10,4 +10,6 @@ public interface IApiKeyRepository
         Guid clientId,
         byte[] keyHash,
         string keyPrefix);
+
+    Task<bool> RevokeAsync(Guid id);
 }

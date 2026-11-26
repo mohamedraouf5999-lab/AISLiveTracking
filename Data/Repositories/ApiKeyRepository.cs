@@ -26,7 +26,7 @@ public class ApiKeyRepository : IApiKeyRepository
                 revoked_utc AS RevokedUtc
             FROM api_keys
             WHERE key_hash = @KeyHash
-        """;
+            """;
 
         using var connection = _database.CreateConnection();
 
@@ -56,7 +56,7 @@ public class ApiKeyRepository : IApiKeyRepository
                 @KeyPrefix,
                 1
             )
-        """;
+            """;
 
         using var connection = _database.CreateConnection();
 
@@ -68,5 +68,26 @@ public class ApiKeyRepository : IApiKeyRepository
                 KeyHash = keyHash,
                 KeyPrefix = keyPrefix
             });
+    }
+
+    public async Task<bool> RevokeAsync(Guid id)
+    {
+        const string sql = """
+            UPDATE api_keys
+            SET
+                is_active = 0,
+                revoked_utc = COALESCE(
+                    revoked_utc,
+                    SYSUTCDATETIME())
+            WHERE id = @Id
+            """;
+
+        using var connection = _database.CreateConnection();
+
+        var rowsAffected = await connection.ExecuteAsync(
+            sql,
+            new { Id = id });
+
+        return rowsAffected > 0;
     }
 }

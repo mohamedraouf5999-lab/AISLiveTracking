@@ -35,4 +35,9 @@ public class ApiKeyService
 
         return (id, rawApiKey, keyPrefix);
     }
+
+    public Task<bool> RevokeAsync(Guid id)
+    {
+        return _apiKeyRepository.RevokeAsync(id);
+    }
 }

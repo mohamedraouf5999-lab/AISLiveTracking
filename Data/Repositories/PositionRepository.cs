@@ -1,6 +1,7 @@
 using AISLiveTracking.API.Data.Interfaces;
 using AISLiveTracking.API.Models;
 using Dapper;
+using System.Data;
 using System.Globalization;
 
 namespace AISLiveTracking.API.Data.Repositories;
@@ -203,24 +204,28 @@ public class PositionRepository : IPositionRepository
 
         using var connection = _database.CreateConnection();
 
+        var parameters = new DynamicParameters();
+
+        parameters.Add("From", from, DbType.DateTime2);
+        parameters.Add("To", to, DbType.DateTime2);
+        parameters.Add("MinLat", minLat);
+        parameters.Add("MaxLat", maxLat);
+        parameters.Add("MinLon", minLon);
+        parameters.Add("MaxLon", maxLon);
+        parameters.Add("Mmsis", mmsis);
+        parameters.Add("NavStatusCodes", navStatusCodes);
+        parameters.Add("MinSog", minSog);
+        parameters.Add("MaxSog", maxSog);
+        parameters.Add(
+            "CursorTimestamp",
+            cursorTimestamp,
+            DbType.DateTime2);
+        parameters.Add("CursorId", cursorId, DbType.Int64);
+        parameters.Add("FetchLimit", limit + 1);
+
         var items = (await connection.QueryAsync<Position>(
             sql,
-            new
-            {
-                From = from,
-                To = to,
-                MinLat = minLat,
-                MaxLat = maxLat,
-                MinLon = minLon,
-                MaxLon = maxLon,
-                Mmsis = mmsis,
-                NavStatusCodes = navStatusCodes,
-                MinSog = minSog,
-                MaxSog = maxSog,
-                CursorTimestamp = cursorTimestamp,
-                CursorId = cursorId,
-                FetchLimit = limit + 1
-            })).AsList();
+            parameters)).AsList();
 
         var hasMore = items.Count > limit;
 

@@ -86,13 +86,13 @@ public class PositionsController : ControllerBase
         }
 
         var hasBoundingBox = boundingBoxValuesCount == 4;
-        var hasTimeFilter = from.HasValue || to.HasValue;
+        var hasTimeWindow = from.HasValue && to.HasValue;
 
-        if (!hasBoundingBox && !hasTimeFilter)
+        if (!hasBoundingBox && !hasTimeWindow)
         {
             return BadRequest(new
             {
-                message = "Provide a time filter or a complete bounding box."
+                message = "Provide both 'from' and 'to', or a complete bounding box."
             });
         }
 

@@ -31,4 +31,20 @@ public class AdminApiKeysController : ControllerBase
             apiKey = result.ApiKey
         });
     }
+
+    [HttpDelete("{id:guid}")]
+    public async Task<IActionResult> Revoke(Guid id)
+    {
+        var revoked = await _apiKeyService.RevokeAsync(id);
+
+        if (!revoked)
+        {
+            return NotFound(new
+            {
+                message = "API key not found."
+            });
+        }
+
+        return NoContent();
+    }
 }

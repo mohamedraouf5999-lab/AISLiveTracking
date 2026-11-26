@@ -51,48 +51,71 @@ public class VesselAnalyticsService : IVesselAnalyticsService
 
         if (requestedWindowSeconds > 0)
         {
-            var coveredSeconds =
-                Math.Max(
-                    0,
-                    (positions[^1].MsgTimestampUtc -
-                     positions[0].MsgTimestampUtc).TotalSeconds);
+            var coveredSeconds = Math.Max(
+                0,
+                (positions[^1].MsgTimestampUtc -
+                 positions[0].MsgTimestampUtc).TotalSeconds);
 
-            result.Window.CoveragePercent =
-                Math.Min(
-                    100,
-                    coveredSeconds / requestedWindowSeconds * 100);
+            result.Window.CoveragePercent = Math.Min(
+                100,
+                coveredSeconds / requestedWindowSeconds * 100);
         }
 
-        var sogValues = positions
-            .Where(p => p.Sog.HasValue)
-            .Select(p => (double)p.Sog!.Value)
-            .ToList();
+        var gapThreshold =
+            TimeSpan.FromMinutes(_options.GapThresholdMinutes);
 
-        if (sogValues.Count > 0)
-        {
-            result.Speed.AvgSogKnots = sogValues.Average();
-            result.Speed.MaxSogKnots = sogValues.Max();
-        }
+        var minimumIdleHours =
+            _options.IdleMinimumMinutes / 60.0;
 
-        var gapThreshold = TimeSpan.FromMinutes(
-            _options.GapThresholdMinutes);
-
-        double distanceKm = 0;
-        double distanceExcludedKm = 0;
+        var distanceKm = 0.0;
+        var distanceExcludedKm = 0.0;
+        var totalSogKnots = 0.0;
+        var sogCount = 0;
+        double? maxSogKnots = null;
         double? maxImpliedKnots = null;
+        var stoppedRunHours = 0.0;
 
-        AnalyticsGap? longestGap = null;
         var gapCount = 0;
         var totalDarkHours = 0.0;
+        AnalyticsGap? longestGap = null;
 
-        double stoppedRunHours = 0;
+        var intervals = new List<double>(
+            Math.Max(positions.Count - 1, 0));
 
-
-        for (var i = 1; i < positions.Count; i++)
+        void CompleteStoppedRun()
         {
-            var previous = positions[i - 1];
+            if (stoppedRunHours >= minimumIdleHours)
+            {
+                result.IdleHours += stoppedRunHours;
+            }
+
+            stoppedRunHours = 0;
+        }
+
+        for (var i = 0; i < positions.Count; i++)
+        {
             var current = positions[i];
 
+            if (current.Sog.HasValue)
+            {
+                var sogKnots = (double)current.Sog.Value;
+
+                totalSogKnots += sogKnots;
+                sogCount++;
+
+                if (!maxSogKnots.HasValue ||
+                    sogKnots > maxSogKnots.Value)
+                {
+                    maxSogKnots = sogKnots;
+                }
+            }
+
+            if (i == 0)
+            {
+                continue;
+            }
+
+            var previous = positions[i - 1];
             var interval = current.MsgTimestampUtc -
                            previous.MsgTimestampUtc;
 
@@ -101,96 +124,79 @@ public class VesselAnalyticsService : IVesselAnalyticsService
                 continue;
             }
 
-            var segmentDistanceKm = GeoCalculator.HaversineDistanceKm(
-                (double)previous.Latitude,
-                (double)previous.Longitude,
-                (double)current.Latitude,
-                (double)current.Longitude);
+            var intervalSeconds = interval.TotalSeconds;
+            var intervalHours = interval.TotalHours;
+
+            intervals.Add(intervalSeconds);
+
+            var segmentDistanceKm =
+                GeoCalculator.HaversineDistanceKm(
+                    (double)previous.Latitude,
+                    (double)previous.Longitude,
+                    (double)current.Latitude,
+                    (double)current.Longitude);
 
             if (interval > gapThreshold)
             {
                 distanceExcludedKm += segmentDistanceKm;
-
                 gapCount++;
-
-                var darkHours = interval.TotalHours;
-                totalDarkHours += darkHours;
+                totalDarkHours += intervalHours;
 
                 if (longestGap == null ||
-                    darkHours > longestGap.Hours)
+                    intervalHours > longestGap.Hours)
                 {
                     longestGap = new AnalyticsGap
                     {
-                        Hours = darkHours,
+                        Hours = intervalHours,
                         From = previous.MsgTimestampUtc,
                         To = current.MsgTimestampUtc
                     };
                 }
 
-                if (stoppedRunHours >=
-                    _options.IdleMinimumMinutes / 60.0)
-                {
-                    result.IdleHours += stoppedRunHours;
-                }
-
-                stoppedRunHours = 0;
-
+                CompleteStoppedRun();
                 continue;
             }
 
             distanceKm += segmentDistanceKm;
 
-            var segmentHours = interval.TotalHours;
-
             if (previous.Sog.HasValue)
             {
                 if (previous.Sog.Value < _options.StopSpeedKnots)
                 {
-                    result.Time.StoppedHours += segmentHours;
-                    stoppedRunHours += segmentHours;
+                    result.Time.StoppedHours += intervalHours;
+                    stoppedRunHours += intervalHours;
                 }
                 else
                 {
-                    result.Time.UnderwayHours += segmentHours;
-
-                    if (stoppedRunHours >=
-                        _options.IdleMinimumMinutes / 60.0)
-                    {
-                        result.IdleHours += stoppedRunHours;
-                    }
-
-                    stoppedRunHours = 0;
+                    result.Time.UnderwayHours += intervalHours;
+                    CompleteStoppedRun();
                 }
             }
             else
             {
-                if (stoppedRunHours >=
-                    _options.IdleMinimumMinutes / 60.0)
-                {
-                    result.IdleHours += stoppedRunHours;
-                }
-
-                stoppedRunHours = 0;
+                CompleteStoppedRun();
             }
 
             if (previous.NavStatus.HasValue)
             {
                 var navStatus = previous.NavStatus.Value;
 
-                if (result.Time.ByNavStatus.ContainsKey(navStatus))
+                if (result.Time.ByNavStatus.TryGetValue(
+                        navStatus,
+                        out var existingHours))
                 {
-                    result.Time.ByNavStatus[navStatus] += segmentHours;
+                    result.Time.ByNavStatus[navStatus] =
+                        existingHours + intervalHours;
                 }
                 else
                 {
-                    result.Time.ByNavStatus[navStatus] = segmentHours;
+                    result.Time.ByNavStatus[navStatus] =
+                        intervalHours;
                 }
             }
 
             var impliedKnots =
-                segmentDistanceKm /
-                interval.TotalHours /
-                1.852;
+                segmentDistanceKm / intervalHours / 1.852;
 
             if (!maxImpliedKnots.HasValue ||
                 impliedKnots > maxImpliedKnots.Value)
@@ -199,32 +205,28 @@ public class VesselAnalyticsService : IVesselAnalyticsService
             }
         }
 
-        if (stoppedRunHours >= _options.IdleMinimumMinutes / 60.0)
+        CompleteStoppedRun();
+
+        if (sogCount > 0)
         {
-            result.IdleHours += stoppedRunHours;
+            result.Speed.AvgSogKnots =
+                totalSogKnots / sogCount;
+
+            result.Speed.MaxSogKnots = maxSogKnots;
         }
 
+        result.Speed.MaxImpliedKnots = maxImpliedKnots;
         result.DistanceKm = distanceKm;
         result.DistanceExcludedKm = distanceExcludedKm;
-
-        result.Speed.MaxImpliedKnots = maxImpliedKnots;
 
         result.Gaps.Count = gapCount;
         result.Gaps.TotalDarkHours = totalDarkHours;
         result.Gaps.Longest = longestGap;
 
-        var intervals = positions
-            .Zip(
-                positions.Skip(1),
-                (previous, current) =>
-                    (current.MsgTimestampUtc -
-                     previous.MsgTimestampUtc).TotalSeconds)
-            .Where(seconds => seconds > 0)
-            .OrderBy(seconds => seconds)
-            .ToList();
-
         if (intervals.Count > 0)
         {
+            intervals.Sort();
+
             var middle = intervals.Count / 2;
 
             result.Reporting.MedianIntervalSeconds =
